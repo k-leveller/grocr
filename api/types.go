@@ -29,7 +29,7 @@ type ProductBarcode struct {
 
 type StockInfo struct {
 	StockAmount float64 `json:"stock_amount"`
-	LastPrice   string  `json:"last_price"`
+	LastPrice   float64 `json:"last_price"`
 }
 
 type Defaults struct {

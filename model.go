@@ -120,7 +120,16 @@ func (m Model) Init() tea.Cmd {
 func (m Model) loadDefaults() tea.Cmd {
 	return func() tea.Msg {
 		if m.testMode {
-			return defaultsLoadedMsg{defaults: &api.Defaults{LocationID: 1, QuID: 1}}
+			return defaultsLoadedMsg{defaults: &api.Defaults{
+				LocationID: 1,
+				QuID:       1,
+				Locations: []api.Location{
+					{ID: 1, Name: "Fridge"},
+					{ID: 2, Name: "Freezer"},
+					{ID: 3, Name: "Pantry"},
+					{ID: 4, Name: "Bathroom"},
+				},
+			}}
 		}
 		d, err := m.grocy.GetDefaults()
 		return defaultsLoadedMsg{defaults: d, err: err}
@@ -401,14 +410,14 @@ func (m Model) buildNewProductForm() ui.Form {
 		expiryHint = fmt.Sprintf("~%dd from %s", shelfDays, shelfSource)
 	}
 
-	locationDefault := "1"
+	locationDefault := ""
 	locationHint := ""
 	if m.defaults != nil && len(m.defaults.Locations) > 0 {
 		var parts []string
 		for i, loc := range m.defaults.Locations {
 			parts = append(parts, fmt.Sprintf("%d)%s", i+1, loc.Name))
 		}
-		locationDefault = "1"
+		locationDefault = m.defaults.Locations[0].Name
 		locationHint = strings.Join(parts, " ")
 	}
 
@@ -434,14 +443,23 @@ func (m Model) buildExistingProductForm() ui.Form {
 		expiryHint = fmt.Sprintf("~%dd from product", shelfDays)
 	}
 
-	locationDefault := "1"
+	locationDefault := ""
 	locationHint := ""
 	if m.defaults != nil && len(m.defaults.Locations) > 0 {
 		var parts []string
 		for i, loc := range m.defaults.Locations {
 			parts = append(parts, fmt.Sprintf("%d)%s", i+1, loc.Name))
 		}
-		locationDefault = "1"
+		// Default to the product's own location name
+		for _, loc := range m.defaults.Locations {
+			if loc.ID == m.currentProduct.LocationID {
+				locationDefault = loc.Name
+				break
+			}
+		}
+		if locationDefault == "" {
+			locationDefault = m.defaults.Locations[0].Name
+		}
 		locationHint = strings.Join(parts, " ")
 	}
 
@@ -623,6 +641,10 @@ func (m Model) submitForm() tea.Cmd {
 			}
 		} else {
 			product = m.currentProduct
+			// Update product's default location if it changed
+			if locationID != product.LocationID {
+				m.grocy.UpdateProductLocation(product.ID, locationID)
+			}
 		}
 
 		err := m.grocy.AddStock(product.ID, quantity, price, bestBefore, locationID)
