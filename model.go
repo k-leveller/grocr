@@ -431,8 +431,13 @@ func (m Model) buildNewProductForm() ui.Form {
 		var parts []string
 		for i, loc := range m.defaults.Locations {
 			parts = append(parts, fmt.Sprintf("%d)%s", i+1, loc.Name))
+			if loc.ID == m.defaults.LocationID && locationDefault == "" {
+				locationDefault = loc.Name
+			}
 		}
-		locationDefault = m.defaults.Locations[0].Name
+		if locationDefault == "" {
+			locationDefault = m.defaults.Locations[0].Name
+		}
 		locationHint = strings.Join(parts, " ")
 	}
 
