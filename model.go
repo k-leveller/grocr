@@ -69,11 +69,13 @@ type Model struct {
 	statusErr bool
 
 	// Loading
-	loading bool
+	loading    bool
+	lookupSeq  int
 }
 
 // Messages
 type lookupResultMsg struct {
+	seq     int
 	product *api.Product
 	offInfo *api.OFFProduct
 	err     error
@@ -148,7 +150,7 @@ func (m Model) loadProducts() tea.Cmd {
 	}
 }
 
-func (m Model) lookupUPC(upc string) tea.Cmd {
+func (m Model) lookupUPC(upc string, seq int) tea.Cmd {
 	return func() tea.Msg {
 		var product *api.Product
 		var offInfo *api.OFFProduct
@@ -163,7 +165,7 @@ func (m Model) lookupUPC(upc string) tea.Cmd {
 		off, _ := m.off.Lookup(upc)
 		offInfo = off
 
-		return lookupResultMsg{product: product, offInfo: offInfo}
+		return lookupResultMsg{seq: seq, product: product, offInfo: offInfo}
 	}
 }
 
@@ -188,6 +190,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case lookupResultMsg:
+		if msg.seq != m.lookupSeq {
+			return m, nil // stale result from a cancelled lookup
+		}
 		m.loading = false
 		if msg.err != nil {
 			m.statusMsg = "Lookup error: " + msg.err.Error()
@@ -278,6 +283,15 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
 	switch key {
+	case "esc":
+		if m.loading {
+			m.loading = false
+			m.lookupSeq++ // invalidate the in-flight lookup
+			m.currentUPC = ""
+			m.statusMsg = "Cancelled"
+			m.statusErr = false
+			return m, m.input.Focus()
+		}
 	case "q":
 		if m.input.Value() == "" {
 			return m, tea.Quit
@@ -313,8 +327,9 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.currentUPC = upc
 		m.loading = true
 		m.statusMsg = ""
+		m.lookupSeq++
 		m.input.Blur()
-		return m, m.lookupUPC(upc)
+		return m, m.lookupUPC(upc, m.lookupSeq)
 	}
 
 	var cmd tea.Cmd

@@ -123,7 +123,7 @@ func (f *Form) View() string {
 		lines = append(lines, line)
 	}
 
-	footer := StyleHint.Render("  Tab/Shift-Tab to navigate, Enter to advance/submit")
+	footer := StyleHint.Render("  Tab/Shift-Tab to navigate, Enter to advance/submit, Esc to cancel")
 	lines = append(lines, "", footer)
 
 	return strings.Join(lines, "\n")
