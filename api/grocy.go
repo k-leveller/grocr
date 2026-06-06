@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -210,17 +211,22 @@ func (c *GrocyClient) CreateProduct(name string, shelfLifeDays *int, defaults *D
 	}
 
 	var result struct {
-		CreatedObjectID int `json:"created_object_id"`
+		CreatedObjectID string `json:"created_object_id"`
 	}
 	if err := json.Unmarshal(respData, &result); err != nil {
 		return nil, err
 	}
 
-	if result.CreatedObjectID > 0 {
+	createdID, err := strconv.Atoi(result.CreatedObjectID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid created_object_id %q: %w", result.CreatedObjectID, err)
+	}
+
+	if createdID > 0 {
 		if shortName != "" {
-			c.SetUserfields("products", result.CreatedObjectID, map[string]string{"short_name": shortName})
+			c.SetUserfields("products", createdID, map[string]string{"short_name": shortName})
 		}
-		return c.GetProduct(result.CreatedObjectID)
+		return c.GetProduct(createdID)
 	}
 
 	return nil, fmt.Errorf("product creation returned no ID")

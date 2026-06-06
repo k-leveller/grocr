@@ -312,6 +312,9 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.input.Blur()
 			return m, nil
 		}
+	case "ctrl+n":
+		m.input.SetValue("")
+		return m.startManualProductEntry()
 	case "enter":
 		val := strings.TrimSpace(m.input.Value())
 		if val == "" {
@@ -362,6 +365,21 @@ func (m Model) handleLookupResult(msg lookupResultMsg) (tea.Model, tea.Cmd) {
 		m.form = m.buildExistingProductForm()
 	}
 
+	return m, nil
+}
+
+func (m Model) startManualProductEntry() (tea.Model, tea.Cmd) {
+	m.lookupSeq++
+	m.loading = false
+	m.isNewProduct = true
+	m.currentProduct = nil
+	m.currentUPC = ""
+	m.offInfo = nil
+	m.statusMsg = ""
+	m.statusErr = false
+	m.input.Blur()
+	m.state = StateForm
+	m.form = m.buildNewProductForm()
 	return m, nil
 }
 

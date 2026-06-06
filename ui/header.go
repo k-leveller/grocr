@@ -17,7 +17,7 @@ func RenderHeader(mode string, width int) string {
 		modeBadge = StyleModeConsume.Render("[EAT]")
 	}
 
-	hints := StyleHint.Render("q:quit m:mode /:search ?:help")
+	hints := StyleHint.Render("q:quit m:mode /:search ^N:new ?:help")
 
 	left := fmt.Sprintf(" %s %s", title, modeBadge)
 	right := fmt.Sprintf("%s ", hints)

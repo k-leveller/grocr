@@ -7,6 +7,7 @@ func RenderHelp(width, height int) string {
 		"  q       Quit\n" +
 		"  m       Toggle Add/Consume mode\n" +
 		"  /       Search products by name\n" +
+		"  Ctrl+N  New product (no barcode)\n" +
 		"  e       Edit product name\n" +
 		"  ?       Toggle this help\n" +
 		"  Tab     Next field\n" +
