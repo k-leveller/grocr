@@ -303,7 +303,7 @@ func (c *GrocyClient) AddBarcode(productID int, barcode string) error {
 	return err
 }
 
-func (c *GrocyClient) AddStock(productID int, amount int, price float64, bestBefore string, locationID int) error {
+func (c *GrocyClient) AddStock(productID int, amount float64, price float64, bestBefore string, locationID int) error {
 	data := map[string]interface{}{
 		"amount":           amount,
 		"transaction_type": "purchase",
@@ -320,7 +320,7 @@ func (c *GrocyClient) AddStock(productID int, amount int, price float64, bestBef
 	return err
 }
 
-func (c *GrocyClient) ConsumeStock(productID int, amount int) error {
+func (c *GrocyClient) ConsumeStock(productID int, amount float64) error {
 	data := map[string]interface{}{
 		"amount":           amount,
 		"transaction_type": "consume",

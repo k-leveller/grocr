@@ -784,7 +784,7 @@ func (m Model) handleLookupViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) submitForm() tea.Cmd {
 	return func() tea.Msg {
 		var productName string
-		var quantity int
+		var quantity float64
 		var price float64
 		var bestBefore string
 		var locationID int
@@ -953,9 +953,9 @@ func (m Model) locationName(id int) string {
 	return ""
 }
 
-func (m Model) parseQuantity(val string) int {
-	n, err := strconv.Atoi(val)
-	if err != nil || n < 1 {
+func (m Model) parseQuantity(val string) float64 {
+	n, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
+	if err != nil || n <= 0 {
 		return 1
 	}
 	return n
@@ -1267,13 +1267,14 @@ func (m Model) renderLookupView() string {
 			ui.StyleLabel.Render("OFF name:"),
 			m.offInfo.Name))
 		if m.offInfo.Categories != "" {
-			cats := m.offInfo.Categories
+			cats := []rune(m.offInfo.Categories)
+			display := string(cats)
 			if len(cats) > 60 {
-				cats = cats[:57] + "..."
+				display = string(cats[:57]) + "..."
 			}
 			lines = append(lines, fmt.Sprintf(" %s %s",
 				ui.StyleLabel.Render("Categories:"),
-				cats))
+				display))
 		}
 	}
 
@@ -1313,13 +1314,14 @@ func (m Model) renderProductInfo() string {
 			m.offInfo.Name,
 			ui.StyleHint.Render("(Open Food Facts)")))
 		if m.offInfo.Categories != "" {
-			cats := m.offInfo.Categories
+			cats := []rune(m.offInfo.Categories)
+			display := string(cats)
 			if len(cats) > 60 {
-				cats = cats[:57] + "..."
+				display = string(cats[:57]) + "..."
 			}
 			lines = append(lines, fmt.Sprintf(" %s %s",
 				ui.StyleLabel.Render("Categories:"),
-				cats))
+				display))
 		}
 		if m.offInfo.ShelfLifeDays != nil {
 			lines = append(lines, fmt.Sprintf(" %s %d days",

@@ -8,7 +8,7 @@ import (
 
 type LogEntry struct {
 	ProductName string
-	Quantity    int
+	Quantity    float64
 	Location    string
 	Expiry      string
 	Action      string // "add" or "consume"
@@ -40,9 +40,9 @@ func RenderLog(entries []LogEntry, maxLines int) string {
 
 		var detail string
 		if e.Action == "consume" {
-			detail = fmt.Sprintf("%s %s x%d consumed", icon, e.ProductName, e.Quantity)
+			detail = fmt.Sprintf("%s %s x%g consumed", icon, e.ProductName, e.Quantity)
 		} else {
-			parts := []string{fmt.Sprintf("%s %s x%d", icon, e.ProductName, e.Quantity)}
+			parts := []string{fmt.Sprintf("%s %s x%g", icon, e.ProductName, e.Quantity)}
 			if e.Location != "" {
 				parts = append(parts, "→ "+e.Location)
 			}
