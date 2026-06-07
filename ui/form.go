@@ -46,6 +46,11 @@ func (f *Form) Update(msg tea.Msg) tea.Cmd {
 			return f.prevField()
 		case "enter":
 			if f.FocusIndex >= len(f.Fields)-1 {
+				if i, ok := f.firstMissingRequired(); ok {
+					f.Fields[f.FocusIndex].Input.Blur()
+					f.FocusIndex = i
+					return f.Fields[f.FocusIndex].Input.Focus()
+				}
 				f.Submitted = true
 				return nil
 			}
@@ -81,6 +86,15 @@ func (f *Form) prevField() tea.Cmd {
 		return f.Fields[f.FocusIndex].Input.Focus()
 	}
 	return nil
+}
+
+func (f *Form) firstMissingRequired() (int, bool) {
+	for i, field := range f.Fields {
+		if field.Required && field.Input.Value() == "" && field.Default == "" {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
 func (f *Form) Value(index int) string {
