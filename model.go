@@ -834,11 +834,8 @@ func (m Model) submitForm() tea.Cmd {
 }
 
 func (m Model) resolveQuantityUnit(val string) int {
-	if m.defaults == nil {
+	if m.defaults == nil || len(m.defaults.QuantityUnits) == 0 {
 		return 1
-	}
-	if len(m.defaults.QuantityUnits) == 0 {
-		return m.defaults.QuID
 	}
 
 	if n, err := strconv.Atoi(val); err == nil && n >= 1 && n <= len(m.defaults.QuantityUnits) {
