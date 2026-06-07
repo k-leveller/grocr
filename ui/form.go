@@ -56,13 +56,16 @@ func (f *Form) Update(msg tea.Msg) tea.Cmd {
 			}
 			return f.nextField()
 		case "right":
-			if i, ok := f.firstMissingRequired(); ok {
-				f.Fields[f.FocusIndex].Input.Blur()
-				f.FocusIndex = i
-				return f.Fields[f.FocusIndex].Input.Focus()
+			input := f.Fields[f.FocusIndex].Input
+			if input.Position() == len([]rune(input.Value())) {
+				if i, ok := f.firstMissingRequired(); ok {
+					f.Fields[f.FocusIndex].Input.Blur()
+					f.FocusIndex = i
+					return f.Fields[f.FocusIndex].Input.Focus()
+				}
+				f.Submitted = true
+				return nil
 			}
-			f.Submitted = true
-			return nil
 		case "esc":
 			f.Cancelled = true
 			return nil
