@@ -207,10 +207,11 @@ func (c *GrocyClient) CreateProduct(name string, shelfLifeDays *int, defaults *D
 	}
 
 	data := map[string]interface{}{
-		"name":           name,
-		"location_id":    locID,
-		"qu_id_purchase": defaults.QuID,
-		"qu_id_stock":    defaults.QuID,
+		"name":                       name,
+		"location_id":                locID,
+		"qu_id_purchase":             defaults.QuID,
+		"qu_id_stock":                defaults.QuID,
+		"default_purchase_price_type": 1,
 	}
 	if storeID > 0 {
 		data["shopping_location_id"] = storeID
