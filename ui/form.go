@@ -55,6 +55,14 @@ func (f *Form) Update(msg tea.Msg) tea.Cmd {
 				return nil
 			}
 			return f.nextField()
+		case "right":
+			if i, ok := f.firstMissingRequired(); ok {
+				f.Fields[f.FocusIndex].Input.Blur()
+				f.FocusIndex = i
+				return f.Fields[f.FocusIndex].Input.Focus()
+			}
+			f.Submitted = true
+			return nil
 		case "esc":
 			f.Cancelled = true
 			return nil
