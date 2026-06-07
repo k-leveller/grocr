@@ -462,7 +462,7 @@ func (m Model) buildNewProductForm() ui.Form {
 	fields := []ui.FormField{
 		{Label: "Name", Default: defaultName},
 		{Label: "Short name", Default: ""},
-		{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (blank=never)"},
+		{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (YYYY-MM-DD, days, or blank=never)"},
 		{Label: "Location", Default: locationDefault, Hint: locationHint},
 		{Label: "Quantity", Default: "1"},
 		{Label: "Price", Default: ""},
@@ -502,7 +502,7 @@ func (m Model) buildExistingProductForm() ui.Form {
 	}
 
 	fields := []ui.FormField{
-		{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (blank=never)"},
+		{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (YYYY-MM-DD, days, or blank=never)"},
 		{Label: "Location", Default: locationDefault, Hint: locationHint},
 		{Label: "Quantity", Default: "1"},
 		{Label: "Price", Default: ""},
@@ -649,9 +649,7 @@ func (m Model) submitForm() tea.Cmd {
 			price = m.parsePrice(m.form.Value(3))
 		}
 
-		if bestBefore == "" || bestBefore == "0" {
-			bestBefore = "2999-12-31"
-		}
+		bestBefore = resolveExpiry(bestBefore)
 
 		if m.testMode {
 			locName := m.locationName(locationID)
@@ -752,6 +750,19 @@ func (m Model) parsePrice(val string) float64 {
 		return 0
 	}
 	return f
+}
+
+// resolveExpiry converts the raw expiry input to a YYYY-MM-DD date string.
+// A plain positive integer is interpreted as days from today; "" or "0" becomes
+// the sentinel never-expires date; anything else is passed through as-is.
+func resolveExpiry(raw string) string {
+	if raw == "" || raw == "0" {
+		return "2999-12-31"
+	}
+	if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+		return time.Now().AddDate(0, 0, n).Format("2006-01-02")
+	}
+	return raw
 }
 
 func (m Model) daysFromExpiry(dateStr string) *int {
