@@ -109,7 +109,7 @@ func (s *Search) View() string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, " "+StyleHint.Render("↑/↓ to navigate, Enter to select, Esc to cancel"))
+	lines = append(lines, " "+StyleHint.Render("↑/↓ to navigate, Enter to select, Ctrl+N new product, Esc to cancel"))
 
 	return strings.Join(lines, "\n")
 }

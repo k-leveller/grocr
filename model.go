@@ -87,7 +87,8 @@ type actionResultMsg struct {
 }
 
 type stockInfoMsg struct {
-	info *api.StockInfo
+	productID int
+	info      *api.StockInfo
 }
 
 type productsLoadedMsg struct {
@@ -207,7 +208,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleLookupResult(msg)
 
 	case stockInfoMsg:
-		m.stockInfo = msg.info
+		if m.currentProduct != nil && msg.productID == m.currentProduct.ID {
+			m.stockInfo = msg.info
+		}
 		return m, nil
 
 	case actionResultMsg:
@@ -394,15 +397,18 @@ func (m Model) startManualProductEntry() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) loadStock() tea.Cmd {
+	productID := m.currentProduct.ID
+	if m.testMode {
+		return func() tea.Msg {
+			return stockInfoMsg{productID: productID, info: &api.StockInfo{StockAmount: 3}}
+		}
+	}
 	return func() tea.Msg {
-		if m.testMode || m.currentProduct == nil {
-			return stockInfoMsg{info: &api.StockInfo{StockAmount: 3}}
-		}
-		info, err := m.grocy.GetStock(m.currentProduct.ID)
+		info, err := m.grocy.GetStock(productID)
 		if err != nil {
-			return stockInfoMsg{}
+			return stockInfoMsg{productID: productID}
 		}
-		return stockInfoMsg{info: info}
+		return stockInfoMsg{productID: productID, info: info}
 	}
 }
 
@@ -597,6 +603,10 @@ func (m Model) handleConsumeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "ctrl+n" {
+		return m.startManualProductEntry()
+	}
+
 	cmd := m.search.Update(msg)
 
 	if m.search.Cancelled {
