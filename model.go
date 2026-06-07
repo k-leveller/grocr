@@ -780,12 +780,107 @@ func (m Model) parseQuantity(val string) int {
 }
 
 func (m Model) parsePrice(val string) float64 {
-	val = strings.TrimPrefix(val, "$")
-	f, err := strconv.ParseFloat(val, 64)
-	if err != nil || f < 0 {
+	val = strings.TrimSpace(strings.TrimPrefix(val, "$"))
+	if val == "" {
 		return 0
 	}
-	return f
+	result, ok := evalArith(val)
+	if !ok || result < 0 {
+		return 0
+	}
+	return result
+}
+
+// evalArith evaluates a simple arithmetic expression supporting +, -, *, /.
+// Operator precedence: * and / before + and -.
+func evalArith(expr string) (float64, bool) {
+	// Split on + and - (additive level), respecting that these may appear
+	// after a * or / already consumed at the multiplicative level.
+	// We parse left-to-right with two levels: additive terms and factors.
+	tokens, ops := splitAdditive(expr)
+	if tokens == nil {
+		return 0, false
+	}
+	sum := 0.0
+	for i, tok := range tokens {
+		val, ok := evalMultiplicative(tok)
+		if !ok {
+			return 0, false
+		}
+		if i == 0 {
+			sum = val
+		} else {
+			switch ops[i-1] {
+			case '+':
+				sum += val
+			case '-':
+				sum -= val
+			}
+		}
+	}
+	return sum, true
+}
+
+// splitAdditive splits expr on top-level '+' and '-' operators.
+func splitAdditive(expr string) ([]string, []rune) {
+	var terms []string
+	var ops []rune
+	start := 0
+	for i, ch := range expr {
+		if (ch == '+' || ch == '-') && i > 0 {
+			terms = append(terms, strings.TrimSpace(expr[start:i]))
+			ops = append(ops, ch)
+			start = i + 1
+		}
+	}
+	terms = append(terms, strings.TrimSpace(expr[start:]))
+	return terms, ops
+}
+
+// evalMultiplicative evaluates a sequence of factors joined by * or /.
+func evalMultiplicative(expr string) (float64, bool) {
+	tokens, ops := splitMultiplicative(expr)
+	if tokens == nil {
+		return 0, false
+	}
+	result := 0.0
+	for i, tok := range tokens {
+		tok = strings.TrimSpace(tok)
+		val, err := strconv.ParseFloat(tok, 64)
+		if err != nil {
+			return 0, false
+		}
+		if i == 0 {
+			result = val
+		} else {
+			switch ops[i-1] {
+			case '*':
+				result *= val
+			case '/':
+				if val == 0 {
+					return 0, false
+				}
+				result /= val
+			}
+		}
+	}
+	return result, true
+}
+
+// splitMultiplicative splits expr on '*' and '/' operators.
+func splitMultiplicative(expr string) ([]string, []rune) {
+	var terms []string
+	var ops []rune
+	start := 0
+	for i, ch := range expr {
+		if ch == '*' || ch == '/' {
+			terms = append(terms, expr[start:i])
+			ops = append(ops, ch)
+			start = i + 1
+		}
+	}
+	terms = append(terms, expr[start:])
+	return terms, ops
 }
 
 // resolveExpiry converts the raw expiry input to a YYYY-MM-DD date string.
