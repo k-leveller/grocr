@@ -180,6 +180,7 @@ func (c *GrocyClient) GetDefaults() (*Defaults, error) {
 
 	units, err := c.GetQuantityUnits()
 	if err == nil && len(units) > 0 {
+		defaults.QuantityUnits = units
 		for _, u := range units {
 			name := strings.ToLower(u.Name)
 			if name == "piece" || name == "pcs" || name == "ea" || name == "each" {
@@ -200,17 +201,20 @@ func (c *GrocyClient) GetDefaults() (*Defaults, error) {
 	return defaults, nil
 }
 
-func (c *GrocyClient) CreateProduct(name string, shelfLifeDays *int, defaults *Defaults, shortName string, locationID int, storeID int, daysAfterFreezing, daysAfterThawing *int) (*Product, error) {
+func (c *GrocyClient) CreateProduct(name string, shelfLifeDays *int, defaults *Defaults, shortName string, locationID int, storeID int, quID int, daysAfterFreezing, daysAfterThawing *int) (*Product, error) {
 	locID := locationID
 	if locID == 0 {
 		locID = defaults.LocationID
 	}
+	if quID == 0 {
+		quID = defaults.QuID
+	}
 
 	data := map[string]interface{}{
-		"name":                       name,
-		"location_id":                locID,
-		"qu_id_purchase":             defaults.QuID,
-		"qu_id_stock":                defaults.QuID,
+		"name":                        name,
+		"location_id":                 locID,
+		"qu_id_purchase":              quID,
+		"qu_id_stock":                 quID,
 		"default_purchase_price_type": 1,
 	}
 	if storeID > 0 {

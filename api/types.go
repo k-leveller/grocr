@@ -39,10 +39,11 @@ type StockInfo struct {
 }
 
 type Defaults struct {
-	LocationID int
-	QuID       int
-	Locations  []Location
-	Stores     []Store
+	LocationID    int
+	QuID          int
+	Locations     []Location
+	Stores        []Store
+	QuantityUnits []QuantityUnit
 }
 
 type OFFProduct struct {

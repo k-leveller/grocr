@@ -137,6 +137,10 @@ func (m Model) loadDefaults() tea.Cmd {
 					{ID: 3, Name: "Pantry"},
 					{ID: 4, Name: "Bathroom"},
 				},
+				QuantityUnits: []api.QuantityUnit{
+					{ID: 1, Name: "Piece"},
+					{ID: 2, Name: "Oz"},
+				},
 			}}
 		}
 		d, err := m.grocy.GetDefaults()
@@ -476,6 +480,22 @@ func (m Model) buildNewProductForm() ui.Form {
 		expiryHint = fmt.Sprintf("~%dd from %s", shelfDays, shelfSource)
 	}
 
+	qtyUnitDefault := ""
+	qtyUnitHint := ""
+	if m.defaults != nil && len(m.defaults.QuantityUnits) > 0 {
+		var parts []string
+		for i, u := range m.defaults.QuantityUnits {
+			parts = append(parts, fmt.Sprintf("%d)%s", i+1, u.Name))
+			if u.ID == m.defaults.QuID && qtyUnitDefault == "" {
+				qtyUnitDefault = u.Name
+			}
+		}
+		if qtyUnitDefault == "" {
+			qtyUnitDefault = m.defaults.QuantityUnits[0].Name
+		}
+		qtyUnitHint = strings.Join(parts, " ")
+	}
+
 	locationDefault := ""
 	locationHint := ""
 	if m.defaults != nil && len(m.defaults.Locations) > 0 {
@@ -505,6 +525,7 @@ func (m Model) buildNewProductForm() ui.Form {
 	fields := []ui.FormField{
 		{Label: "Name", Default: defaultName, Required: true},
 		{Label: "Short name", Default: ""},
+		{Label: "Qty unit", Default: qtyUnitDefault, Hint: qtyUnitHint, Required: true},
 		{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (YYYY-MM-DD, days, or blank=never)"},
 		{Label: "Location", Default: locationDefault, Hint: locationHint},
 		{Label: "Store", Default: storeDefault, Hint: storeHint},
@@ -562,11 +583,21 @@ func (m Model) buildExistingProductForm() ui.Form {
 		storeHint = strings.Join(parts, " ")
 	}
 
+	qtyUnitHint := ""
+	if m.defaults != nil {
+		for _, u := range m.defaults.QuantityUnits {
+			if u.ID == m.currentProduct.QuIDStock {
+				qtyUnitHint = u.Name
+				break
+			}
+		}
+	}
+
 	fields := []ui.FormField{
 		{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (YYYY-MM-DD, days, or blank=never)"},
 		{Label: "Location", Default: locationDefault, Hint: locationHint},
 		{Label: "Store", Default: storeDefault, Hint: storeHint},
-		{Label: "Quantity", Default: "1"},
+		{Label: "Quantity", Default: "1", Hint: qtyUnitHint},
 		{Label: "Price", Default: ""},
 	}
 
@@ -723,14 +754,16 @@ func (m Model) submitForm() tea.Cmd {
 
 		var storeID int
 		var storeErr error
+		var quID int
 		if m.isNewProduct {
 			productName = m.form.Value(0)
 			// shortName = m.form.Value(1)
-			bestBefore = m.form.Value(2)
-			locationID = m.resolveLocation(m.form.Value(3))
-			storeID, storeErr = m.resolveOrCreateStore(m.form.Value(4))
-			quantity = m.parseQuantity(m.form.Value(5))
-			price = m.parsePrice(m.form.Value(6))
+			quID = m.resolveQuantityUnit(m.form.Value(2))
+			bestBefore = m.form.Value(3)
+			locationID = m.resolveLocation(m.form.Value(4))
+			storeID, storeErr = m.resolveOrCreateStore(m.form.Value(5))
+			quantity = m.parseQuantity(m.form.Value(6))
+			price = m.parsePrice(m.form.Value(7))
 		} else {
 			productName = m.currentProduct.Name
 			bestBefore = m.form.Value(0)
@@ -765,7 +798,7 @@ func (m Model) submitForm() tea.Cmd {
 			shortName := m.form.Value(1)
 			shelfDays := m.daysFromExpiry(bestBefore)
 			freezeDays := 365
-			p, err := m.grocy.CreateProduct(productName, shelfDays, m.defaults, shortName, locationID, storeID, &freezeDays, shelfDays)
+			p, err := m.grocy.CreateProduct(productName, shelfDays, m.defaults, shortName, locationID, storeID, quID, &freezeDays, shelfDays)
 			if err != nil {
 				return actionResultMsg{err: fmt.Errorf("create product: %w", err)}
 			}
@@ -798,6 +831,28 @@ func (m Model) submitForm() tea.Cmd {
 		}
 		return actionResultMsg{entry: entry, err: err}
 	}
+}
+
+func (m Model) resolveQuantityUnit(val string) int {
+	if m.defaults == nil {
+		return 1
+	}
+	if len(m.defaults.QuantityUnits) == 0 {
+		return m.defaults.QuID
+	}
+
+	if n, err := strconv.Atoi(val); err == nil && n >= 1 && n <= len(m.defaults.QuantityUnits) {
+		return m.defaults.QuantityUnits[n-1].ID
+	}
+
+	lower := strings.ToLower(val)
+	for _, u := range m.defaults.QuantityUnits {
+		if strings.HasPrefix(strings.ToLower(u.Name), lower) {
+			return u.ID
+		}
+	}
+
+	return m.defaults.QuID
 }
 
 func (m Model) resolveLocation(val string) int {
