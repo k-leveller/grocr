@@ -10,9 +10,9 @@ func RenderHelp(width, height int) string {
 		"  Ctrl+N  New product (no barcode)\n" +
 		"  e       Edit product name\n" +
 		"  ?       Toggle this help\n" +
-		"  Tab     Next field\n" +
-		"  S-Tab   Previous field\n" +
-		"  Enter   Advance / Submit\n" +
+		"  Tab/↓   Next field\n" +
+		"  S-Tab/↑ Previous field\n" +
+		"  Enter   Submit form\n" +
 		"  Esc     Cancel current scan\n" +
 		"  Ctrl+C  Quit\n"
 

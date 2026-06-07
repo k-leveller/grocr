@@ -45,27 +45,13 @@ func (f *Form) Update(msg tea.Msg) tea.Cmd {
 		case "shift+tab", "up":
 			return f.prevField()
 		case "enter":
-			if f.FocusIndex >= len(f.Fields)-1 {
-				if i, ok := f.firstMissingRequired(); ok {
-					f.Fields[f.FocusIndex].Input.Blur()
-					f.FocusIndex = i
-					return f.Fields[f.FocusIndex].Input.Focus()
-				}
-				f.Submitted = true
-				return nil
+			if i, ok := f.firstMissingRequired(); ok {
+				f.Fields[f.FocusIndex].Input.Blur()
+				f.FocusIndex = i
+				return f.Fields[f.FocusIndex].Input.Focus()
 			}
-			return f.nextField()
-		case "right":
-			input := f.Fields[f.FocusIndex].Input
-			if input.Position() == len([]rune(input.Value())) {
-				if i, ok := f.firstMissingRequired(); ok {
-					f.Fields[f.FocusIndex].Input.Blur()
-					f.FocusIndex = i
-					return f.Fields[f.FocusIndex].Input.Focus()
-				}
-				f.Submitted = true
-				return nil
-			}
+			f.Submitted = true
+			return nil
 		case "esc":
 			f.Cancelled = true
 			return nil
@@ -153,7 +139,7 @@ func (f *Form) View() string {
 		lines = append(lines, line)
 	}
 
-	footer := StyleHint.Render("  Tab/Shift-Tab to navigate, Enter to advance/submit, Esc to cancel")
+	footer := StyleHint.Render("  Tab/↓ to navigate fields, Enter to submit, Esc to cancel")
 	lines = append(lines, "", footer)
 
 	return strings.Join(lines, "\n")
