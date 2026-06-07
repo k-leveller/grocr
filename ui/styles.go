@@ -47,6 +47,9 @@ var (
 	StyleSeparator = lipgloss.NewStyle().
 			Foreground(ColorDim)
 
+	StyleRequired = lipgloss.NewStyle().
+			Foreground(ColorRed)
+
 	StyleLogEntry = lipgloss.NewStyle().
 			Foreground(ColorDim)
 

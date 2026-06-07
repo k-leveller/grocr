@@ -9,10 +9,11 @@ import (
 )
 
 type FormField struct {
-	Label       string
-	Default     string
-	Hint        string
-	Input       textinput.Model
+	Label    string
+	Default  string
+	Hint     string
+	Required bool
+	Input    textinput.Model
 }
 
 type Form struct {
@@ -96,7 +97,11 @@ func (f *Form) Value(index int) string {
 func (f *Form) View() string {
 	var lines []string
 	for i, field := range f.Fields {
-		label := StyleLabel.Render(field.Label)
+		labelText := field.Label
+		if field.Required {
+			labelText += StyleRequired.Render("*")
+		}
+		label := StyleLabel.Render(labelText)
 		defaultStr := ""
 		if field.Default != "" {
 			defaultStr = fmt.Sprintf("[%s]", field.Default)

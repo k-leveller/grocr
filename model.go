@@ -460,7 +460,7 @@ func (m Model) buildNewProductForm() ui.Form {
 	}
 
 	fields := []ui.FormField{
-		{Label: "Name", Default: defaultName},
+		{Label: "Name", Default: defaultName, Required: true},
 		{Label: "Short name", Default: ""},
 		{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (YYYY-MM-DD, days, or blank=never)"},
 		{Label: "Location", Default: locationDefault, Hint: locationHint},
