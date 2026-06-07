@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -785,7 +786,7 @@ func (m Model) parsePrice(val string) float64 {
 		return 0
 	}
 	result, ok := evalArith(val)
-	if !ok || result < 0 {
+	if !ok || result < 0 || math.IsInf(result, 0) || math.IsNaN(result) {
 		return 0
 	}
 	return result
@@ -794,13 +795,7 @@ func (m Model) parsePrice(val string) float64 {
 // evalArith evaluates a simple arithmetic expression supporting +, -, *, /.
 // Operator precedence: * and / before + and -.
 func evalArith(expr string) (float64, bool) {
-	// Split on + and - (additive level), respecting that these may appear
-	// after a * or / already consumed at the multiplicative level.
-	// We parse left-to-right with two levels: additive terms and factors.
 	tokens, ops := splitAdditive(expr)
-	if tokens == nil {
-		return 0, false
-	}
 	sum := 0.0
 	for i, tok := range tokens {
 		val, ok := evalMultiplicative(tok)
@@ -822,13 +817,24 @@ func evalArith(expr string) (float64, bool) {
 }
 
 // splitAdditive splits expr on top-level '+' and '-' operators.
+// It skips signs that are part of a scientific-notation exponent (e.g. "1e-3")
+// and skips signs that immediately follow another operator (e.g. "6+-1.5" keeps
+// "-1.5" as the second term rather than splitting again).
 func splitAdditive(expr string) ([]string, []rune) {
 	var terms []string
 	var ops []rune
 	start := 0
 	for i, ch := range expr {
 		if (ch == '+' || ch == '-') && i > 0 {
-			terms = append(terms, strings.TrimSpace(expr[start:i]))
+			prev := expr[i-1]
+			if prev == 'e' || prev == 'E' {
+				continue // exponent sign in scientific notation, not an operator
+			}
+			term := strings.TrimSpace(expr[start:i])
+			if term == "" {
+				continue // sign immediately follows another operator; treat as unary
+			}
+			terms = append(terms, term)
 			ops = append(ops, ch)
 			start = i + 1
 		}
@@ -840,9 +846,6 @@ func splitAdditive(expr string) ([]string, []rune) {
 // evalMultiplicative evaluates a sequence of factors joined by * or /.
 func evalMultiplicative(expr string) (float64, bool) {
 	tokens, ops := splitMultiplicative(expr)
-	if tokens == nil {
-		return 0, false
-	}
 	result := 0.0
 	for i, tok := range tokens {
 		tok = strings.TrimSpace(tok)
