@@ -489,11 +489,22 @@ func (m Model) buildNewProductForm() ui.Form {
 		locationHint = strings.Join(parts, " ")
 	}
 
+	storeDefault := ""
+	storeHint := ""
+	if m.defaults != nil && len(m.defaults.Stores) > 0 {
+		var parts []string
+		for i, s := range m.defaults.Stores {
+			parts = append(parts, fmt.Sprintf("%d)%s", i+1, s.Name))
+		}
+		storeHint = strings.Join(parts, " ")
+	}
+
 	fields := []ui.FormField{
 		{Label: "Name", Default: defaultName, Required: true},
 		{Label: "Short name", Default: ""},
 		{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (YYYY-MM-DD, days, or blank=never)"},
 		{Label: "Location", Default: locationDefault, Hint: locationHint},
+		{Label: "Store", Default: storeDefault, Hint: storeHint},
 		{Label: "Quantity", Default: "1"},
 		{Label: "Price", Default: ""},
 	}
@@ -531,9 +542,27 @@ func (m Model) buildExistingProductForm() ui.Form {
 		locationHint = strings.Join(parts, " ")
 	}
 
+	storeDefault := ""
+	storeHint := ""
+	if m.defaults != nil && len(m.defaults.Stores) > 0 {
+		var parts []string
+		for i, s := range m.defaults.Stores {
+			parts = append(parts, fmt.Sprintf("%d)%s", i+1, s.Name))
+		}
+		// Default to the product's own store name
+		for _, s := range m.defaults.Stores {
+			if s.ID == m.currentProduct.ShoppingLocationID {
+				storeDefault = s.Name
+				break
+			}
+		}
+		storeHint = strings.Join(parts, " ")
+	}
+
 	fields := []ui.FormField{
 		{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (YYYY-MM-DD, days, or blank=never)"},
 		{Label: "Location", Default: locationDefault, Hint: locationHint},
+		{Label: "Store", Default: storeDefault, Hint: storeHint},
 		{Label: "Quantity", Default: "1"},
 		{Label: "Price", Default: ""},
 	}
@@ -671,19 +700,22 @@ func (m Model) submitForm() tea.Cmd {
 		var bestBefore string
 		var locationID int
 
+		var storeID int
 		if m.isNewProduct {
 			productName = m.form.Value(0)
 			// shortName = m.form.Value(1)
 			bestBefore = m.form.Value(2)
 			locationID = m.resolveLocation(m.form.Value(3))
-			quantity = m.parseQuantity(m.form.Value(4))
-			price = m.parsePrice(m.form.Value(5))
+			storeID = m.resolveStore(m.form.Value(4))
+			quantity = m.parseQuantity(m.form.Value(5))
+			price = m.parsePrice(m.form.Value(6))
 		} else {
 			productName = m.currentProduct.Name
 			bestBefore = m.form.Value(0)
 			locationID = m.resolveLocation(m.form.Value(1))
-			quantity = m.parseQuantity(m.form.Value(2))
-			price = m.parsePrice(m.form.Value(3))
+			storeID = m.resolveStore(m.form.Value(2))
+			quantity = m.parseQuantity(m.form.Value(3))
+			price = m.parsePrice(m.form.Value(4))
 		}
 
 		bestBefore = resolveExpiry(bestBefore)
@@ -708,7 +740,7 @@ func (m Model) submitForm() tea.Cmd {
 			shortName := m.form.Value(1)
 			shelfDays := m.daysFromExpiry(bestBefore)
 			freezeDays := 365
-			p, err := m.grocy.CreateProduct(productName, shelfDays, m.defaults, shortName, locationID, &freezeDays, shelfDays)
+			p, err := m.grocy.CreateProduct(productName, shelfDays, m.defaults, shortName, locationID, storeID, &freezeDays, shelfDays)
 			if err != nil {
 				return actionResultMsg{err: fmt.Errorf("create product: %w", err)}
 			}
@@ -721,6 +753,10 @@ func (m Model) submitForm() tea.Cmd {
 			// Update product's default location if it changed
 			if locationID != product.LocationID {
 				m.grocy.UpdateProductLocation(product.ID, locationID)
+			}
+			// Update product's default store if it changed
+			if storeID != product.ShoppingLocationID {
+				m.grocy.UpdateProductStore(product.ID, storeID)
 			}
 		}
 
@@ -758,6 +794,27 @@ func (m Model) resolveLocation(val string) int {
 	}
 
 	return m.defaults.LocationID
+}
+
+func (m Model) resolveStore(val string) int {
+	if m.defaults == nil || len(m.defaults.Stores) == 0 || val == "" {
+		return 0
+	}
+
+	// Try as number (1-indexed)
+	if n, err := strconv.Atoi(val); err == nil && n >= 1 && n <= len(m.defaults.Stores) {
+		return m.defaults.Stores[n-1].ID
+	}
+
+	// Try name prefix match
+	lower := strings.ToLower(val)
+	for _, s := range m.defaults.Stores {
+		if strings.HasPrefix(strings.ToLower(s.Name), lower) {
+			return s.ID
+		}
+	}
+
+	return 0
 }
 
 func (m Model) locationName(id int) string {

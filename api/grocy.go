@@ -145,6 +145,18 @@ func (c *GrocyClient) GetLocations() ([]Location, error) {
 	return locs, nil
 }
 
+func (c *GrocyClient) GetStores() ([]Store, error) {
+	data, err := c.request("GET", "/objects/shopping_locations", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var stores []Store
+	if err := json.Unmarshal(data, &stores); err != nil {
+		return nil, err
+	}
+	return stores, nil
+}
+
 func (c *GrocyClient) GetQuantityUnits() ([]QuantityUnit, error) {
 	data, err := c.request("GET", "/objects/quantity_units", nil, nil)
 	if err != nil {
@@ -180,10 +192,15 @@ func (c *GrocyClient) GetDefaults() (*Defaults, error) {
 		}
 	}
 
+	stores, err := c.GetStores()
+	if err == nil {
+		defaults.Stores = stores
+	}
+
 	return defaults, nil
 }
 
-func (c *GrocyClient) CreateProduct(name string, shelfLifeDays *int, defaults *Defaults, shortName string, locationID int, daysAfterFreezing, daysAfterThawing *int) (*Product, error) {
+func (c *GrocyClient) CreateProduct(name string, shelfLifeDays *int, defaults *Defaults, shortName string, locationID int, storeID int, daysAfterFreezing, daysAfterThawing *int) (*Product, error) {
 	locID := locationID
 	if locID == 0 {
 		locID = defaults.LocationID
@@ -194,6 +211,9 @@ func (c *GrocyClient) CreateProduct(name string, shelfLifeDays *int, defaults *D
 		"location_id":    locID,
 		"qu_id_purchase": defaults.QuID,
 		"qu_id_stock":    defaults.QuID,
+	}
+	if storeID > 0 {
+		data["shopping_location_id"] = storeID
 	}
 	if shelfLifeDays != nil {
 		data["default_best_before_days"] = *shelfLifeDays
@@ -240,6 +260,12 @@ func (c *GrocyClient) UpdateProductName(productID int, newName string) error {
 
 func (c *GrocyClient) UpdateProductLocation(productID int, locationID int) error {
 	data := map[string]interface{}{"location_id": locationID}
+	_, err := c.request("PUT", fmt.Sprintf("/objects/products/%d", productID), data, nil)
+	return err
+}
+
+func (c *GrocyClient) UpdateProductStore(productID int, storeID int) error {
+	data := map[string]interface{}{"shopping_location_id": storeID}
 	_, err := c.request("PUT", fmt.Sprintf("/objects/products/%d", productID), data, nil)
 	return err
 }

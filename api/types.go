@@ -4,6 +4,7 @@ type Product struct {
 	ID                              int    `json:"id"`
 	Name                            string `json:"name"`
 	LocationID                      int    `json:"location_id"`
+	ShoppingLocationID              int    `json:"shopping_location_id"`
 	QuIDPurchase                    int    `json:"qu_id_purchase"`
 	QuIDStock                       int    `json:"qu_id_stock"`
 	DefaultBestBeforeDays           int    `json:"default_best_before_days"`
@@ -12,6 +13,11 @@ type Product struct {
 }
 
 type Location struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type Store struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
 }
@@ -36,6 +42,7 @@ type Defaults struct {
 	LocationID int
 	QuID       int
 	Locations  []Location
+	Stores     []Store
 }
 
 type OFFProduct struct {
