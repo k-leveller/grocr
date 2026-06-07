@@ -462,7 +462,7 @@ func (m Model) buildNewProductForm() ui.Form {
 	fields := []ui.FormField{
 		{Label: "Name", Default: defaultName},
 		{Label: "Short name", Default: ""},
-		{Label: "Expires", Default: expiryDefault, Hint: expiryHint},
+		{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (blank=never)"},
 		{Label: "Location", Default: locationDefault, Hint: locationHint},
 		{Label: "Quantity", Default: "1"},
 		{Label: "Price", Default: ""},
@@ -502,7 +502,7 @@ func (m Model) buildExistingProductForm() ui.Form {
 	}
 
 	fields := []ui.FormField{
-		{Label: "Expires", Default: expiryDefault, Hint: expiryHint},
+		{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (blank=never)"},
 		{Label: "Location", Default: locationDefault, Hint: locationHint},
 		{Label: "Quantity", Default: "1"},
 		{Label: "Price", Default: ""},
@@ -649,6 +649,10 @@ func (m Model) submitForm() tea.Cmd {
 			price = m.parsePrice(m.form.Value(3))
 		}
 
+		if bestBefore == "" || bestBefore == "0" {
+			bestBefore = "2999-12-31"
+		}
+
 		if m.testMode {
 			locName := m.locationName(locationID)
 			entry := ui.LogEntry{
@@ -751,6 +755,10 @@ func (m Model) parsePrice(val string) float64 {
 }
 
 func (m Model) daysFromExpiry(dateStr string) *int {
+	if dateStr == "2999-12-31" {
+		n := -1
+		return &n
+	}
 	t, err := time.Parse("2006-01-02", dateStr)
 	if err != nil {
 		return nil
