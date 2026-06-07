@@ -11,10 +11,13 @@ func RenderHeader(mode string, width int) string {
 	title := StyleHeader.Render("GROCY SCANNER")
 
 	var modeBadge string
-	if mode == "add" {
+	switch mode {
+	case "add":
 		modeBadge = StyleModeAdd.Render("[ADD]")
-	} else {
+	case "consume":
 		modeBadge = StyleModeConsume.Render("[EAT]")
+	default:
+		modeBadge = StyleModeLookup.Render("[LOOK]")
 	}
 
 	hints := StyleHint.Render("q:quit m:mode /:search ^N:new ?:help")

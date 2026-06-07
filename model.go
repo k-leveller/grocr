@@ -25,11 +25,12 @@ const (
 	StateConsume
 	StateSearch
 	StateEditName
+	StateLookupView
 )
 
 type Model struct {
 	state    AppState
-	mode     string // "add" or "consume"
+	mode     string // "add", "consume", or "lookup"
 	width    int
 	height   int
 	showHelp bool
@@ -294,6 +295,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleSearchKey(msg)
 	case StateEditName:
 		return m.handleEditNameKey(msg)
+	case StateLookupView:
+		return m.handleLookupViewKey(msg)
 	}
 
 	return m, nil
@@ -318,9 +321,12 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "m":
 		if m.input.Value() == "" {
-			if m.mode == "add" {
+			switch m.mode {
+			case "add":
 				m.mode = "consume"
-			} else {
+			case "consume":
+				m.mode = "lookup"
+			default:
 				m.mode = "add"
 			}
 			return m, nil
@@ -375,6 +381,18 @@ func (m Model) handleLookupResult(msg lookupResultMsg) (tea.Model, tea.Cmd) {
 		// Load stock info
 		m.state = StateConsume
 		return m, m.loadStockForConsume()
+	}
+
+	if m.mode == "lookup" {
+		if msg.product == nil {
+			m.statusMsg = "Product not found in Grocy"
+			m.statusErr = true
+			m.state = StateIdle
+			return m, m.input.Focus()
+		}
+		m.state = StateLookupView
+		m.stockInfo = nil
+		return m, m.loadStock()
 	}
 
 	if m.isNewProduct {
@@ -691,6 +709,12 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.loadStockForConsume()
 		}
 
+		if m.mode == "lookup" {
+			m.state = StateLookupView
+			m.stockInfo = nil
+			return m, m.loadStock()
+		}
+
 		m.state = StateDisplay
 		m.form = m.buildExistingProductForm()
 		m.stockInfo = nil
@@ -742,6 +766,19 @@ func (m Model) handleEditNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.editInput, cmd = m.editInput.Update(msg)
 	return m, cmd
+}
+
+func (m Model) handleLookupViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "enter":
+		m.state = StateIdle
+		m.currentProduct = nil
+		m.offInfo = nil
+		m.stockInfo = nil
+		m.input.SetValue("")
+		return m, m.input.Focus()
+	}
+	return m, nil
 }
 
 func (m Model) submitForm() tea.Cmd {
@@ -1123,6 +1160,8 @@ func (m Model) View() string {
 		}
 	case StateSearch:
 		sections = append(sections, m.search.View())
+	case StateLookupView:
+		sections = append(sections, m.renderLookupView())
 	}
 
 	// Fill remaining space
@@ -1137,6 +1176,8 @@ func (m Model) View() string {
 	inputBar := ui.StyleSeparator.Render(strings.Repeat("─", m.width)) + "\n"
 	if m.state == StateIdle {
 		inputBar += " > " + m.input.View()
+	} else if m.state == StateLookupView {
+		inputBar += " " + ui.StyleHint.Render("Esc or Enter to dismiss")
 	} else if m.loading {
 		inputBar += " " + ui.StyleHint.Render("loading...")
 	} else {
@@ -1144,6 +1185,99 @@ func (m Model) View() string {
 	}
 
 	return content + "\n" + inputBar
+}
+
+func (m Model) renderLookupView() string {
+	var lines []string
+
+	lines = append(lines, " "+ui.StyleBold.Render("Product Overview"))
+	lines = append(lines, "")
+
+	if m.currentProduct == nil {
+		return strings.Join(lines, "\n")
+	}
+
+	lines = append(lines, fmt.Sprintf(" %s %s  %s",
+		ui.StyleLabel.Render("Product:"),
+		m.currentProduct.Name,
+		ui.StyleHint.Render(fmt.Sprintf("[id:%d]", m.currentProduct.ID))))
+
+	if m.currentUPC != "" {
+		lines = append(lines, fmt.Sprintf(" %s %s",
+			ui.StyleLabel.Render("UPC:"),
+			m.currentUPC))
+	}
+
+	if m.stockInfo != nil {
+		stockLine := fmt.Sprintf("%g", m.stockInfo.StockAmount)
+		if m.defaults != nil {
+			for _, u := range m.defaults.QuantityUnits {
+				if u.ID == m.currentProduct.QuIDStock {
+					stockLine += " " + u.Name
+					break
+				}
+			}
+		}
+		lines = append(lines, fmt.Sprintf(" %s %s",
+			ui.StyleLabel.Render("In stock:"),
+			stockLine))
+	} else {
+		lines = append(lines, fmt.Sprintf(" %s %s",
+			ui.StyleLabel.Render("In stock:"),
+			ui.StyleHint.Render("loading...")))
+	}
+
+	if m.defaults != nil {
+		for _, loc := range m.defaults.Locations {
+			if loc.ID == m.currentProduct.LocationID {
+				lines = append(lines, fmt.Sprintf(" %s %s",
+					ui.StyleLabel.Render("Location:"),
+					loc.Name))
+				break
+			}
+		}
+		for _, s := range m.defaults.Stores {
+			if s.ID == m.currentProduct.ShoppingLocationID {
+				lines = append(lines, fmt.Sprintf(" %s %s",
+					ui.StyleLabel.Render("Store:"),
+					s.Name))
+				break
+			}
+		}
+	}
+
+	if m.currentProduct.DefaultBestBeforeDays > 0 {
+		lines = append(lines, fmt.Sprintf(" %s %d days",
+			ui.StyleLabel.Render("Shelf life:"),
+			m.currentProduct.DefaultBestBeforeDays))
+	} else if m.currentProduct.DefaultBestBeforeDays < 0 {
+		lines = append(lines, fmt.Sprintf(" %s never",
+			ui.StyleLabel.Render("Shelf life:")))
+	}
+
+	if m.stockInfo != nil && m.stockInfo.LastPrice > 0 {
+		lines = append(lines, fmt.Sprintf(" %s $%.2f",
+			ui.StyleLabel.Render("Last price:"),
+			m.stockInfo.LastPrice))
+	}
+
+	if m.offInfo != nil && m.offInfo.Name != "" {
+		lines = append(lines, "")
+		lines = append(lines, fmt.Sprintf(" %s %s",
+			ui.StyleLabel.Render("OFF name:"),
+			m.offInfo.Name))
+		if m.offInfo.Categories != "" {
+			cats := m.offInfo.Categories
+			if len(cats) > 60 {
+				cats = cats[:57] + "..."
+			}
+			lines = append(lines, fmt.Sprintf(" %s %s",
+				ui.StyleLabel.Render("Categories:"),
+				cats))
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) renderProductInfo() string {

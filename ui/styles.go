@@ -22,6 +22,10 @@ var (
 				Bold(true).
 				Foreground(ColorRed)
 
+	StyleModeLookup = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(ColorCyan)
+
 	StyleHint = lipgloss.NewStyle().
 			Foreground(ColorDim)
 
