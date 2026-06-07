@@ -211,6 +211,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stockInfoMsg:
 		if m.currentProduct != nil && msg.productID == m.currentProduct.ID {
 			m.stockInfo = msg.info
+			if msg.info != nil && msg.info.LastPrice > 0 && m.state == StateDisplay {
+				const priceFieldIdx = 4
+				if priceFieldIdx < len(m.form.Fields) && m.form.Fields[priceFieldIdx].Input.Value() == "" {
+					priceStr := fmt.Sprintf("%.2f", msg.info.LastPrice)
+					m.form.Fields[priceFieldIdx].Default = priceStr
+					m.form.Fields[priceFieldIdx].Input.Placeholder = priceStr
+				}
+			}
 		}
 		return m, nil
 
