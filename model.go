@@ -86,6 +86,10 @@ type actionResultMsg struct {
 	err   error
 }
 
+type stockInfoMsg struct {
+	info *api.StockInfo
+}
+
 type productsLoadedMsg struct {
 	products []api.Product
 }
@@ -202,6 +206,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.handleLookupResult(msg)
 
+	case stockInfoMsg:
+		m.stockInfo = msg.info
+		return m, nil
+
 	case actionResultMsg:
 		m.loading = false
 		if msg.err != nil {
@@ -214,6 +222,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = StateIdle
 		m.currentProduct = nil
 		m.offInfo = nil
+		m.stockInfo = nil
 		m.input.SetValue("")
 		return m, m.input.Focus()
 
@@ -360,12 +369,13 @@ func (m Model) handleLookupResult(msg lookupResultMsg) (tea.Model, tea.Cmd) {
 	if m.isNewProduct {
 		m.state = StateForm
 		m.form = m.buildNewProductForm()
-	} else {
-		m.state = StateDisplay
-		m.form = m.buildExistingProductForm()
+		return m, nil
 	}
 
-	return m, nil
+	m.state = StateDisplay
+	m.form = m.buildExistingProductForm()
+	m.stockInfo = nil
+	return m, m.loadStock()
 }
 
 func (m Model) startManualProductEntry() (tea.Model, tea.Cmd) {
@@ -381,6 +391,19 @@ func (m Model) startManualProductEntry() (tea.Model, tea.Cmd) {
 	m.state = StateForm
 	m.form = m.buildNewProductForm()
 	return m, nil
+}
+
+func (m Model) loadStock() tea.Cmd {
+	return func() tea.Msg {
+		if m.testMode || m.currentProduct == nil {
+			return stockInfoMsg{info: &api.StockInfo{StockAmount: 3}}
+		}
+		info, err := m.grocy.GetStock(m.currentProduct.ID)
+		if err != nil {
+			return stockInfoMsg{}
+		}
+		return stockInfoMsg{info: info}
+	}
 }
 
 func (m Model) loadStockForConsume() tea.Cmd {
@@ -518,6 +541,7 @@ func (m Model) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = StateIdle
 		m.currentProduct = nil
 		m.offInfo = nil
+		m.stockInfo = nil
 		m.input.SetValue("")
 		return m, m.input.Focus()
 	}
@@ -550,6 +574,7 @@ func (m Model) handleDisplayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = StateIdle
 		m.currentProduct = nil
 		m.offInfo = nil
+		m.stockInfo = nil
 		m.input.SetValue("")
 		return m, m.input.Focus()
 	}
@@ -594,7 +619,8 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		m.state = StateDisplay
 		m.form = m.buildExistingProductForm()
-		return m, nil
+		m.stockInfo = nil
+		return m, m.loadStock()
 	}
 
 	return m, cmd
@@ -883,6 +909,11 @@ func (m Model) renderProductInfo() string {
 			ui.StyleLabel.Render("Product:"),
 			m.currentProduct.Name,
 			ui.StyleHint.Render(fmt.Sprintf("[id:%d]", m.currentProduct.ID))))
+		if m.stockInfo != nil {
+			lines = append(lines, fmt.Sprintf(" %s %g",
+				ui.StyleLabel.Render("In stock:"),
+				m.stockInfo.StockAmount))
+		}
 		if m.currentProduct.DefaultBestBeforeDays > 0 {
 			lines = append(lines, fmt.Sprintf(" %s %d days",
 				ui.StyleLabel.Render("Shelf life:"),
