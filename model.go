@@ -211,13 +211,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stockInfoMsg:
 		if m.currentProduct != nil && msg.productID == m.currentProduct.ID {
 			m.stockInfo = msg.info
-			if msg.info != nil && msg.info.LastPrice > 0 && m.state == StateDisplay {
-				const priceFieldIdx = 4
-				if priceFieldIdx < len(m.form.Fields) && m.form.Fields[priceFieldIdx].Input.Value() == "" {
-					priceStr := fmt.Sprintf("%.2f", msg.info.LastPrice)
-					m.form.Fields[priceFieldIdx].Default = priceStr
-					m.form.Fields[priceFieldIdx].Input.Placeholder = priceStr
-				}
+			if m.state == StateDisplay {
+				m.applyPriceDefault()
 			}
 		}
 		return m, nil
@@ -674,6 +669,22 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m *Model) applyPriceDefault() {
+	const priceFieldIdx = 4
+	if m.stockInfo == nil || m.stockInfo.LastPrice <= 0 {
+		return
+	}
+	if priceFieldIdx >= len(m.form.Fields) {
+		return
+	}
+	if m.form.Fields[priceFieldIdx].Input.Value() != "" || m.form.Fields[priceFieldIdx].Default != "" {
+		return
+	}
+	priceStr := fmt.Sprintf("%.2f", m.stockInfo.LastPrice)
+	m.form.Fields[priceFieldIdx].Default = priceStr
+	m.form.Fields[priceFieldIdx].Input.Placeholder = priceStr
+}
+
 func (m Model) handleEditNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
@@ -689,9 +700,11 @@ func (m Model) handleEditNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusErr = false
 		}
 		m.state = StateDisplay
+		m.applyPriceDefault()
 		return m, nil
 	case "esc":
 		m.state = StateDisplay
+		m.applyPriceDefault()
 		return m, nil
 	}
 
@@ -709,21 +722,25 @@ func (m Model) submitForm() tea.Cmd {
 		var locationID int
 
 		var storeID int
+		var storeErr error
 		if m.isNewProduct {
 			productName = m.form.Value(0)
 			// shortName = m.form.Value(1)
 			bestBefore = m.form.Value(2)
 			locationID = m.resolveLocation(m.form.Value(3))
-			storeID = m.resolveStore(m.form.Value(4))
+			storeID, storeErr = m.resolveOrCreateStore(m.form.Value(4))
 			quantity = m.parseQuantity(m.form.Value(5))
 			price = m.parsePrice(m.form.Value(6))
 		} else {
 			productName = m.currentProduct.Name
 			bestBefore = m.form.Value(0)
 			locationID = m.resolveLocation(m.form.Value(1))
-			storeID = m.resolveStore(m.form.Value(2))
+			storeID, storeErr = m.resolveOrCreateStore(m.form.Value(2))
 			quantity = m.parseQuantity(m.form.Value(3))
 			price = m.parsePrice(m.form.Value(4))
+		}
+		if storeErr != nil {
+			return actionResultMsg{err: storeErr}
 		}
 
 		bestBefore = resolveExpiry(bestBefore)
@@ -804,25 +821,35 @@ func (m Model) resolveLocation(val string) int {
 	return m.defaults.LocationID
 }
 
-func (m Model) resolveStore(val string) int {
-	if m.defaults == nil || len(m.defaults.Stores) == 0 || val == "" {
-		return 0
+func (m Model) resolveOrCreateStore(val string) (int, error) {
+	if val == "" {
+		return 0, nil
 	}
 
-	// Try as number (1-indexed)
-	if n, err := strconv.Atoi(val); err == nil && n >= 1 && n <= len(m.defaults.Stores) {
-		return m.defaults.Stores[n-1].ID
-	}
+	if m.defaults != nil && len(m.defaults.Stores) > 0 {
+		// Try as number (1-indexed)
+		if n, err := strconv.Atoi(val); err == nil && n >= 1 && n <= len(m.defaults.Stores) {
+			return m.defaults.Stores[n-1].ID, nil
+		}
 
-	// Try name prefix match
-	lower := strings.ToLower(val)
-	for _, s := range m.defaults.Stores {
-		if strings.HasPrefix(strings.ToLower(s.Name), lower) {
-			return s.ID
+		// Try name prefix match
+		lower := strings.ToLower(val)
+		for _, s := range m.defaults.Stores {
+			if strings.HasPrefix(strings.ToLower(s.Name), lower) {
+				return s.ID, nil
+			}
 		}
 	}
 
-	return 0
+	// No match — create a new store
+	if m.testMode {
+		return 0, nil
+	}
+	store, err := m.grocy.CreateStore(val)
+	if err != nil {
+		return 0, fmt.Errorf("create store: %w", err)
+	}
+	return store.ID, nil
 }
 
 func (m Model) locationName(id int) string {

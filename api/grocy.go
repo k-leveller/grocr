@@ -270,6 +270,25 @@ func (c *GrocyClient) UpdateProductStore(productID int, storeID int) error {
 	return err
 }
 
+func (c *GrocyClient) CreateStore(name string) (*Store, error) {
+	data := map[string]interface{}{"name": name}
+	respData, err := c.request("POST", "/objects/shopping_locations", data, nil)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		CreatedObjectID string `json:"created_object_id"`
+	}
+	if err := json.Unmarshal(respData, &result); err != nil {
+		return nil, err
+	}
+	id, err := strconv.Atoi(result.CreatedObjectID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid created_object_id %q: %w", result.CreatedObjectID, err)
+	}
+	return &Store{ID: id, Name: name}, nil
+}
+
 func (c *GrocyClient) AddBarcode(productID int, barcode string) error {
 	data := map[string]interface{}{
 		"product_id": productID,
