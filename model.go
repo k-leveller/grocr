@@ -246,6 +246,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.expiringSoonLoaded = true
 		if msg.err == nil {
 			m.expiringSoon = msg.items
+			if m.expPanelCursor >= len(m.expiringSoon) {
+				m.expPanelCursor = max(len(m.expiringSoon)-1, 0)
+			}
 		}
 		return m, nil
 
@@ -1504,7 +1507,11 @@ func (m Model) renderExpiringSoonPanel(bodyH int) string {
 			name += strings.Repeat(" ", nameColW-len(runes))
 		}
 
-		lines = append(lines, " "+name+" "+daysStyle.Render(daysText))
+		prefix := " "
+		if i == m.expPanelCursor {
+			prefix = ui.StyleWarning.Render(">")
+		}
+		lines = append(lines, prefix+name+" "+daysStyle.Render(daysText))
 	}
 
 	return strings.Join(lines, "\n")
