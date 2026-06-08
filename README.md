@@ -2,6 +2,10 @@
 
 A terminal UI for scanning barcodes into [Grocy](https://grocy.info/) inventory. Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
+## Compatibility
+
+Tested against **Grocy 4.6.0**. Other recent versions will likely work, but 4.6.0 is the reference version used during development.
+
 ## What it does
 
 Reads UPC barcodes (from a USB scanner or typed manually), looks up product info from Grocy and Open Food Facts, then adds or consumes stock. Products not yet in Grocy are created on the fly with sensible defaults for shelf life and location.
