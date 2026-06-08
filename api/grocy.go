@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,10 +24,16 @@ type GrocyClient struct {
 }
 
 func NewGrocyClient(cfg *config.Config) *GrocyClient {
+	transport := http.DefaultTransport
+	if cfg.TLSSkipVerify {
+		transport = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+		}
+	}
 	return &GrocyClient{
 		baseURL:              strings.TrimRight(cfg.BaseURL, "/"),
 		apiKey:               cfg.APIKey,
-		httpClient:           &http.Client{Timeout: 15 * time.Second},
+		httpClient:           &http.Client{Timeout: 15 * time.Second, Transport: transport},
 		displayNameUserfield: cfg.DisplayNameUserfield,
 	}
 }
