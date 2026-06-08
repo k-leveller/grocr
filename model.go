@@ -1484,7 +1484,7 @@ func (m Model) View() string {
 	var body string
 	if m.width >= expPanelMinWidth {
 		mainW := m.width - expPanelWidth - 1
-		mainContent := m.renderMainContent(mainW)
+		mainContent := m.renderMainContent(mainW, bodyH)
 		panelContent := m.renderExpiringSoonPanel(bodyH)
 
 		mainBlock := lipgloss.NewStyle().Width(mainW).Height(bodyH).Render(mainContent)
@@ -1499,7 +1499,7 @@ func (m Model) View() string {
 
 		body = lipgloss.JoinHorizontal(lipgloss.Top, mainBlock, sepBlock, panelBlock)
 	} else {
-		mainContent := m.renderMainContent(m.width)
+		mainContent := m.renderMainContent(m.width, bodyH)
 		body = lipgloss.NewStyle().Height(bodyH).Render(mainContent)
 	}
 
@@ -1524,7 +1524,7 @@ func (m Model) renderInputLine() string {
 	}
 }
 
-func (m Model) renderMainContent(width int) string {
+func (m Model) renderMainContent(width, bodyH int) string {
 	var sections []string
 
 	maxLogLines := 5
@@ -1564,7 +1564,7 @@ func (m Model) renderMainContent(width int) string {
 	case StateLookupView:
 		sections = append(sections, m.renderLookupView())
 	case StatePriceHistory:
-		sections = append(sections, m.renderPriceHistoryView())
+		sections = append(sections, m.renderPriceHistoryView(bodyH))
 	case StateShoppingListPrompt:
 		if m.currentProduct != nil {
 			sections = append(sections, fmt.Sprintf(" %s %s",
@@ -1748,7 +1748,7 @@ func (m Model) renderLookupView() string {
 	return strings.Join(lines, "\n")
 }
 
-func (m Model) renderPriceHistoryView() string {
+func (m Model) renderPriceHistoryView(bodyH int) string {
 	var lines []string
 
 	name := ""
@@ -1778,7 +1778,26 @@ func (m Model) renderPriceHistoryView() string {
 		}
 	}
 
+	// 2 header lines already consumed; clamp visible rows to remaining height
+	maxItems := bodyH - 2
+	if maxItems < 1 {
+		maxItems = 1
+	}
+
+	// Scroll offset: keep cursor visible
+	offset := 0
+	if m.priceHistoryCursor >= maxItems {
+		offset = m.priceHistoryCursor - maxItems + 1
+	}
+
 	for i, txn := range m.priceHistory {
+		if i < offset {
+			continue
+		}
+		if i-offset >= maxItems {
+			break
+		}
+
 		date := txn.Date
 		if len(date) >= 10 {
 			date = date[:10]
