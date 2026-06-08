@@ -337,6 +337,16 @@ func (c *GrocyClient) ConsumeStock(productID int, amount float64, spoiled bool) 
 	return err
 }
 
+func (c *GrocyClient) TransferStock(productID int, amount float64, fromLocationID, toLocationID int) error {
+	data := map[string]interface{}{
+		"amount":           amount,
+		"location_id_from": fromLocationID,
+		"location_id_to":   toLocationID,
+	}
+	_, err := c.request("POST", fmt.Sprintf("/stock/products/%d/transfer", productID), data, nil)
+	return err
+}
+
 func (c *GrocyClient) GetStock(productID int) (*StockInfo, error) {
 	data, err := c.request("GET", fmt.Sprintf("/stock/products/%d", productID), nil, nil)
 	if err != nil {

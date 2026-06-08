@@ -37,6 +37,7 @@ const (
 	StateShoppingListPrompt
 	StatePriceHistory
 	StateEditNotes
+	StateTransfer
 )
 
 type Model struct {
@@ -322,6 +323,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				logger.LogConsume(msg.entry.ProductName, msg.entry.Quantity)
 				m.statusMsg = "Spoiled: " + msg.entry.ProductName
 				m.statusErr = false
+			case "transfer":
+				from, to, _ := strings.Cut(msg.entry.Location, " → ")
+				logger.LogTransfer(msg.entry.ProductName, msg.entry.Quantity, from, to)
+				m.statusMsg = ""
 			default:
 				logger.LogAdd(msg.entry.ProductName, msg.entry.Quantity, msg.entry.Location, msg.entry.Expiry)
 				m.statusMsg = ""
@@ -431,6 +436,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleShoppingListKey(msg)
 	case StateEditNotes:
 		return m.handleEditNotesKey(msg)
+	case StateTransfer:
+		return m.handleTransferFormKey(msg)
 	}
 
 	return m, nil
@@ -862,6 +869,89 @@ func (m Model) buildExistingProductForm() ui.Form {
 	return ui.NewForm(fields)
 }
 
+func (m Model) buildTransferForm() ui.Form {
+	locationHint := ""
+	fromDefault := ""
+	toDefault := ""
+
+	if m.defaults != nil && len(m.defaults.Locations) > 0 {
+		var parts []string
+		for i, loc := range m.defaults.Locations {
+			parts = append(parts, fmt.Sprintf("%d)%s", i+1, loc.Name))
+		}
+		locationHint = strings.Join(parts, " ")
+
+		for _, loc := range m.defaults.Locations {
+			if loc.ID == m.currentProduct.LocationID {
+				fromDefault = loc.Name
+				break
+			}
+		}
+		if fromDefault == "" {
+			fromDefault = m.defaults.Locations[0].Name
+		}
+		for _, loc := range m.defaults.Locations {
+			if loc.Name != fromDefault {
+				toDefault = loc.Name
+				break
+			}
+		}
+	}
+
+	fields := []ui.FormField{
+		{Label: "Quantity", Default: "1"},
+		{Label: "From", Default: fromDefault, Hint: locationHint},
+		{Label: "To", Default: toDefault, Hint: locationHint},
+	}
+
+	return ui.NewForm(fields)
+}
+
+func (m Model) handleTransferFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	cmd := m.form.Update(msg)
+
+	if m.form.Cancelled {
+		m.state = StateLookupView
+		return m, nil
+	}
+
+	if m.form.Submitted {
+		m.loading = true
+		return m, m.submitTransfer()
+	}
+
+	return m, cmd
+}
+
+func (m Model) submitTransfer() tea.Cmd {
+	product := m.currentProduct
+	return func() tea.Msg {
+		quantity := m.parseQuantity(m.form.Value(0))
+		fromID := m.resolveLocation(m.form.Value(1))
+		toID := m.resolveLocation(m.form.Value(2))
+
+		fromName := m.locationName(fromID)
+		toName := m.locationName(toID)
+
+		entry := ui.LogEntry{
+			ProductName: product.Name,
+			Quantity:    quantity,
+			Location:    fromName + " → " + toName,
+			Action:      "transfer",
+			Time:        time.Now(),
+		}
+
+		if m.testMode {
+			entry.Success = true
+			return actionResultMsg{entry: entry}
+		}
+
+		err := m.grocy.TransferStock(product.ID, quantity, fromID, toID)
+		entry.Success = err == nil
+		return actionResultMsg{entry: entry, err: err}
+	}
+}
+
 func (m Model) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	cmd := m.form.Update(msg)
 
@@ -1042,6 +1132,11 @@ func (m Model) handleLookupViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			ti.CharLimit = 500
 			ti.Width = 60
 			m.editInput = ti
+		}
+	case "t":
+		if m.currentProduct != nil {
+			m.state = StateTransfer
+			m.form = m.buildTransferForm()
 		}
 	}
 	return m, nil
@@ -1563,7 +1658,9 @@ func (m Model) renderInputLine() string {
 	case StateIdle:
 		return " > " + m.input.View()
 	case StateLookupView:
-		return " " + ui.StyleHint.Render("n = notes  •  p = price history  •  Esc/Enter = dismiss")
+		return " " + ui.StyleHint.Render("n = notes  •  p = price history  •  t = transfer  •  Esc/Enter = dismiss")
+	case StateTransfer:
+		return " " + ui.StyleHint.Render("Tab/↓ next field  •  Enter submit  •  Esc cancel")
 	case StatePriceHistory:
 		return " " + ui.StyleHint.Render("j/k = navigate  •  Esc/p = back")
 	case StateEditNotes:
@@ -1622,6 +1719,11 @@ func (m Model) renderMainContent(width, bodyH int) string {
 		sections = append(sections, m.search.View())
 	case StateLookupView:
 		sections = append(sections, m.renderLookupView())
+	case StateTransfer:
+		sections = append(sections, m.renderLookupView())
+		sections = append(sections, "")
+		sections = append(sections, " "+ui.StyleBold.Render("Transfer stock"))
+		sections = append(sections, m.form.View())
 	case StatePriceHistory:
 		sections = append(sections, m.renderPriceHistoryView(bodyH))
 	case StateShoppingListPrompt:

@@ -54,6 +54,13 @@ func LogEditNotes(productName string) {
 	sl.Info(fmt.Sprintf("EDIT_NOTES product=%q", productName))
 }
 
+func LogTransfer(productName string, quantity float64, fromLoc, toLoc string) {
+	if sl == nil {
+		return
+	}
+	sl.Info(fmt.Sprintf("TRANSFER product=%q qty=%g from=%q to=%q", productName, quantity, fromLoc, toLoc))
+}
+
 func LogShoppingList(productName string) {
 	if sl == nil {
 		return

@@ -43,6 +43,8 @@ func RenderLog(entries []LogEntry, maxLines int) string {
 			detail = fmt.Sprintf("%s %s x%g consumed", icon, e.ProductName, e.Quantity)
 		} else if e.Action == "spoiled" {
 			detail = fmt.Sprintf("%s %s x%g spoiled", icon, e.ProductName, e.Quantity)
+		} else if e.Action == "transfer" {
+			detail = fmt.Sprintf("%s %s x%g %s", icon, e.ProductName, e.Quantity, e.Location)
 		} else {
 			parts := []string{fmt.Sprintf("%s %s x%g", icon, e.ProductName, e.Quantity)}
 			if e.Location != "" {
