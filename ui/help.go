@@ -10,6 +10,7 @@ func RenderHelp(width, height int) string {
 		"  Ctrl+N  New product (no barcode)\n" +
 		"  Ctrl+E  Export stock to CSV\n" +
 		"  e       Edit product name\n" +
+		"  p       Price history (lookup view)\n" +
 		"  ?       Toggle this help\n" +
 		"  ↑/↓     Cycle UPC scan history (idle input)\n" +
 		"  j/k     Navigate expiring-soon panel\n" +

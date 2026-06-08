@@ -64,3 +64,13 @@ type StockEntry struct {
 	LocationID     int
 	BestBeforeDate string
 }
+
+type StockTransaction struct {
+	ID          int     `json:"id"`
+	ProductID   int     `json:"product_id"`
+	Date        string  `json:"row_created_timestamp"`
+	Type        string  `json:"transaction_type"`
+	Amount      float64 `json:"amount"`
+	Price       float64 `json:"price"`
+	ShoppingLocationID int `json:"shopping_location_id"`
+}

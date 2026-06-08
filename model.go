@@ -35,6 +35,7 @@ const (
 	StateEditName
 	StateLookupView
 	StateShoppingListPrompt
+	StatePriceHistory
 )
 
 type Model struct {
@@ -79,6 +80,10 @@ type Model struct {
 	expiringSoon       []api.ExpiringItem
 	expiringSoonLoaded bool
 	expPanelCursor     int
+
+	// Price history panel
+	priceHistory       []api.StockTransaction
+	priceHistoryCursor int
 
 	// Status message
 	statusMsg string
@@ -125,6 +130,12 @@ type productsLoadedMsg struct {
 type expiringSoonMsg struct {
 	items []api.ExpiringItem
 	err   error
+}
+
+type priceHistoryMsg struct {
+	productID int
+	items     []api.StockTransaction
+	err       error
 }
 
 type defaultsLoadedMsg struct {
@@ -254,6 +265,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.expiringSoon = msg.items
 			if m.expPanelCursor >= len(m.expiringSoon) {
 				m.expPanelCursor = max(len(m.expiringSoon)-1, 0)
+			}
+		}
+		return m, nil
+
+	case priceHistoryMsg:
+		if m.currentProduct != nil && msg.productID == m.currentProduct.ID {
+			if msg.err != nil {
+				m.statusMsg = "Price history unavailable: " + msg.err.Error()
+				m.statusErr = true
+				m.state = StateLookupView
+			} else {
+				m.priceHistory = msg.items
+				m.priceHistoryCursor = 0
 			}
 		}
 		return m, nil
@@ -394,6 +418,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleEditNameKey(msg)
 	case StateLookupView:
 		return m.handleLookupViewKey(msg)
+	case StatePriceHistory:
+		return m.handlePriceHistoryKey(msg)
 	case StateShoppingListPrompt:
 		return m.handleShoppingListKey(msg)
 	}
@@ -601,6 +627,19 @@ func (m Model) loadStock() tea.Cmd {
 			return stockInfoMsg{productID: productID}
 		}
 		return stockInfoMsg{productID: productID, info: info}
+	}
+}
+
+func (m Model) loadPriceHistory() tea.Cmd {
+	productID := m.currentProduct.ID
+	if m.testMode {
+		return func() tea.Msg {
+			return priceHistoryMsg{productID: productID, items: []api.StockTransaction{}}
+		}
+	}
+	return func() tea.Msg {
+		txns, err := m.grocy.GetPurchaseHistory(productID, 20)
+		return priceHistoryMsg{productID: productID, items: txns, err: err}
 	}
 }
 
@@ -978,6 +1017,30 @@ func (m Model) handleLookupViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.stockInfo = nil
 		m.input.SetValue("")
 		return m, m.input.Focus()
+	case "p":
+		if m.currentProduct != nil {
+			m.state = StatePriceHistory
+			m.priceHistory = nil
+			m.priceHistoryCursor = 0
+			return m, m.loadPriceHistory()
+		}
+	}
+	return m, nil
+}
+
+func (m Model) handlePriceHistoryKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "enter", "p":
+		m.state = StateLookupView
+		return m, nil
+	case "j", "down":
+		if m.priceHistoryCursor < len(m.priceHistory)-1 {
+			m.priceHistoryCursor++
+		}
+	case "k", "up":
+		if m.priceHistoryCursor > 0 {
+			m.priceHistoryCursor--
+		}
 	}
 	return m, nil
 }
@@ -1448,7 +1511,9 @@ func (m Model) renderInputLine() string {
 	case StateIdle:
 		return " > " + m.input.View()
 	case StateLookupView:
-		return " " + ui.StyleHint.Render("Esc or Enter to dismiss")
+		return " " + ui.StyleHint.Render("p = price history  •  Esc/Enter = dismiss")
+	case StatePriceHistory:
+		return " " + ui.StyleHint.Render("j/k = navigate  •  Esc/p = back")
 	case StateShoppingListPrompt:
 		return " " + ui.StyleHint.Render("y = yes, any other key = no")
 	default:
@@ -1498,6 +1563,8 @@ func (m Model) renderMainContent(width int) string {
 		sections = append(sections, m.search.View())
 	case StateLookupView:
 		sections = append(sections, m.renderLookupView())
+	case StatePriceHistory:
+		sections = append(sections, m.renderPriceHistoryView())
 	case StateShoppingListPrompt:
 		if m.currentProduct != nil {
 			sections = append(sections, fmt.Sprintf(" %s %s",
@@ -1676,6 +1743,73 @@ func (m Model) renderLookupView() string {
 				ui.StyleLabel.Render("Categories:"),
 				display))
 		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) renderPriceHistoryView() string {
+	var lines []string
+
+	name := ""
+	if m.currentProduct != nil {
+		name = m.currentProduct.Name
+	}
+	lines = append(lines, fmt.Sprintf(" %s %s", ui.StyleBold.Render("Price History:"), name))
+	lines = append(lines, "")
+
+	if m.priceHistory == nil {
+		lines = append(lines, " "+ui.StyleHint.Render("Loading..."))
+		return strings.Join(lines, "\n")
+	}
+
+	if len(m.priceHistory) == 0 {
+		lines = append(lines, " "+ui.StyleHint.Render("No purchase history found."))
+		return strings.Join(lines, "\n")
+	}
+
+	unitName := ""
+	if m.defaults != nil && m.currentProduct != nil {
+		for _, u := range m.defaults.QuantityUnits {
+			if u.ID == m.currentProduct.QuIDPurchase {
+				unitName = u.Name
+				break
+			}
+		}
+	}
+
+	for i, txn := range m.priceHistory {
+		date := txn.Date
+		if len(date) >= 10 {
+			date = date[:10]
+		}
+
+		var priceStr string
+		if txn.Price > 0 {
+			priceStr = fmt.Sprintf("$%.2f", txn.Price)
+			if unitName != "" {
+				priceStr += "/" + unitName
+			}
+		} else {
+			priceStr = ui.StyleHint.Render("(no price)")
+		}
+
+		storeName := ""
+		if m.defaults != nil && txn.ShoppingLocationID > 0 {
+			for _, s := range m.defaults.Stores {
+				if s.ID == txn.ShoppingLocationID {
+					storeName = "  " + ui.StyleHint.Render(s.Name)
+					break
+				}
+			}
+		}
+
+		prefix := "  "
+		if i == m.priceHistoryCursor {
+			prefix = ui.StyleWarning.Render("> ")
+		}
+		lines = append(lines, fmt.Sprintf("%s%s  %s%s",
+			prefix, ui.StyleLabel.Render(date), priceStr, storeName))
 	}
 
 	return strings.Join(lines, "\n")

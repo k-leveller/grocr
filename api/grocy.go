@@ -394,6 +394,23 @@ func (c *GrocyClient) GetStockSnapshot() ([]StockEntry, error) {
 	return entries, nil
 }
 
+func (c *GrocyClient) GetPurchaseHistory(productID int, limit int) ([]StockTransaction, error) {
+	data, err := c.request("GET", "/stock/transactions", nil, map[string]string{
+		"product_id":       strconv.Itoa(productID),
+		"transaction_type": "purchase",
+		"order[]":          "row_created_timestamp DESC",
+		"limit":            strconv.Itoa(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	var txns []StockTransaction
+	if err := json.Unmarshal(data, &txns); err != nil {
+		return nil, err
+	}
+	return txns, nil
+}
+
 func (c *GrocyClient) GetExpiringSoon(withinDays int) ([]ExpiringItem, error) {
 	data, err := c.request("GET", "/stock", nil, nil)
 	if err != nil {
