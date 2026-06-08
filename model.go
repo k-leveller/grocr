@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/csv"
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -76,6 +78,7 @@ type Model struct {
 	// Expiring soon panel
 	expiringSoon       []api.ExpiringItem
 	expiringSoonLoaded bool
+	expPanelCursor     int
 
 	// Status message
 	statusMsg string
@@ -122,6 +125,11 @@ type expiringSoonMsg struct {
 type defaultsLoadedMsg struct {
 	defaults *api.Defaults
 	err      error
+}
+
+type exportResultMsg struct {
+	path string
+	err  error
 }
 
 func NewModel(grocy *api.GrocyClient, off *api.OFFClient, testMode bool) Model {
@@ -306,6 +314,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case exportResultMsg:
+		m.loading = false
+		if msg.err != nil {
+			logger.LogError("export: " + msg.err.Error())
+			m.statusMsg = "Export failed: " + msg.err.Error()
+			m.statusErr = true
+		} else {
+			m.statusMsg = "Exported to " + msg.path
+			m.statusErr = false
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -389,6 +409,31 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.input.Value() == "" {
 			return m, tea.Quit
 		}
+	case "j", "down":
+		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
+			m.expPanelCursor = min(m.expPanelCursor+1, len(m.expiringSoon)-1)
+			return m, nil
+		}
+	case "k", "up":
+		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
+			m.expPanelCursor = max(m.expPanelCursor-1, 0)
+			return m, nil
+		}
+	case "d":
+		if m.input.Value() == "" && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
+			item := m.expiringSoon[m.expPanelCursor]
+			var product *api.Product
+			for i := range m.allProducts {
+				if m.allProducts[i].ID == item.ProductID {
+					product = &m.allProducts[i]
+					break
+				}
+			}
+			m.currentProduct = product
+			m.loading = true
+			m.statusMsg = ""
+			return m, m.consumeFromPanel(item, product)
+		}
 	case "m":
 		if m.input.Value() == "" {
 			switch m.mode {
@@ -407,6 +452,12 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.search = ui.NewSearch(m.allProducts)
 			m.input.Blur()
 			return m, nil
+		}
+	case "ctrl+e":
+		if m.input.Value() == "" {
+			m.loading = true
+			m.statusMsg = ""
+			return m, m.doExport()
 		}
 	case "ctrl+n":
 		m.input.SetValue("")
@@ -522,9 +573,34 @@ func (m Model) loadStockForConsume() tea.Cmd {
 		if info.StockAmount <= 0 {
 			return actionResultMsg{err: fmt.Errorf("no stock on hand")}
 		}
-		err = m.grocy.ConsumeStock(m.currentProduct.ID, 1)
+		err = m.grocy.ConsumeStock(m.currentProduct.ID, 1, false)
 		entry := ui.LogEntry{
 			ProductName: m.currentProduct.Name,
+			Quantity:    1,
+			Action:      "consume",
+			Success:     err == nil,
+			Time:        time.Now(),
+		}
+		zeroedStock := err == nil && info.StockAmount-1 <= 0
+		return actionResultMsg{entry: entry, err: err, zeroedStock: zeroedStock}
+	}
+}
+
+func (m Model) consumeFromPanel(item api.ExpiringItem, product *api.Product) tea.Cmd {
+	return func() tea.Msg {
+		if m.testMode {
+			return actionResultMsg{err: fmt.Errorf("cannot consume in test mode")}
+		}
+		info, err := m.grocy.GetStock(item.ProductID)
+		if err != nil {
+			return actionResultMsg{err: err}
+		}
+		if info.StockAmount <= 0 {
+			return actionResultMsg{err: fmt.Errorf("no stock on hand for %s", item.ProductName)}
+		}
+		err = m.grocy.ConsumeStock(item.ProductID, 1, true)
+		entry := ui.LogEntry{
+			ProductName: item.ProductName,
 			Quantity:    1,
 			Action:      "consume",
 			Success:     err == nil,
@@ -883,6 +959,64 @@ func (m Model) addToShoppingList() tea.Cmd {
 	return func() tea.Msg {
 		err := m.grocy.AddToShoppingList(product.ID)
 		return shoppingListMsg{productName: product.Name, err: err}
+	}
+}
+
+func (m Model) doExport() tea.Cmd {
+	return func() tea.Msg {
+		var entries []api.StockEntry
+		if m.testMode {
+			entries = []api.StockEntry{
+				{ProductName: "Test Product", Amount: 1, LocationID: 1, BestBeforeDate: "2026-12-31"},
+			}
+		} else {
+			var err error
+			entries, err = m.grocy.GetStockSnapshot()
+			if err != nil {
+				return exportResultMsg{err: err}
+			}
+		}
+
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return exportResultMsg{err: fmt.Errorf("home dir: %w", err)}
+		}
+		path := fmt.Sprintf("%s/grocy-export-%s.csv", home, time.Now().Format("20060102"))
+
+		f, err := os.Create(path)
+		if err != nil {
+			return exportResultMsg{err: err}
+		}
+		defer f.Close()
+
+		w := csv.NewWriter(f)
+		if err := w.Write([]string{"name", "amount", "location", "best_before"}); err != nil {
+			return exportResultMsg{err: err}
+		}
+		for _, e := range entries {
+			locName := ""
+			if m.defaults != nil {
+				for _, loc := range m.defaults.Locations {
+					if loc.ID == e.LocationID {
+						locName = loc.Name
+						break
+					}
+				}
+			}
+			bb := e.BestBeforeDate
+			if bb == "2999-12-31" {
+				bb = ""
+			}
+			if err := w.Write([]string{e.ProductName, strconv.FormatFloat(e.Amount, 'f', -1, 64), locName, bb}); err != nil {
+				return exportResultMsg{err: err}
+			}
+		}
+		w.Flush()
+		if err := w.Error(); err != nil {
+			return exportResultMsg{err: err}
+		}
+
+		return exportResultMsg{path: path}
 	}
 }
 

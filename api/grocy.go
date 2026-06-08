@@ -321,11 +321,11 @@ func (c *GrocyClient) AddStock(productID int, amount float64, price float64, bes
 	return err
 }
 
-func (c *GrocyClient) ConsumeStock(productID int, amount float64) error {
+func (c *GrocyClient) ConsumeStock(productID int, amount float64, spoiled bool) error {
 	data := map[string]interface{}{
 		"amount":           amount,
 		"transaction_type": "consume",
-		"spoiled":          false,
+		"spoiled":          spoiled,
 	}
 	_, err := c.request("POST", fmt.Sprintf("/stock/products/%d/consume", productID), data, nil)
 	return err
@@ -356,6 +356,42 @@ func (c *GrocyClient) AddToShoppingList(productID int) error {
 	}
 	_, err := c.request("POST", "/stock/shoppinglist/add-product", data, nil)
 	return err
+}
+
+func (c *GrocyClient) GetStockSnapshot() ([]StockEntry, error) {
+	data, err := c.request("GET", "/stock", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var raw []struct {
+		ProductID      int     `json:"product_id"`
+		Amount         float64 `json:"amount"`
+		LocationID     int     `json:"location_id"`
+		BestBeforeDate string  `json:"best_before_date"`
+		Product        struct {
+			Name string `json:"name"`
+		} `json:"product"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+
+	entries := make([]StockEntry, 0, len(raw))
+	for _, e := range raw {
+		entries = append(entries, StockEntry{
+			ProductName:    e.Product.Name,
+			Amount:         e.Amount,
+			LocationID:     e.LocationID,
+			BestBeforeDate: e.BestBeforeDate,
+		})
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].ProductName < entries[j].ProductName
+	})
+
+	return entries, nil
 }
 
 func (c *GrocyClient) GetExpiringSoon(withinDays int) ([]ExpiringItem, error) {

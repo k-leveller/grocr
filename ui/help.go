@@ -8,6 +8,7 @@ func RenderHelp(width, height int) string {
 		"  m       Toggle Add/Consume mode\n" +
 		"  /       Search products by name\n" +
 		"  Ctrl+N  New product (no barcode)\n" +
+		"  Ctrl+E  Export stock to CSV\n" +
 		"  e       Edit product name\n" +
 		"  ?       Toggle this help\n" +
 		"  Tab/↓   Next field\n" +

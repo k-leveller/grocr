@@ -57,3 +57,10 @@ type ExpiringItem struct {
 	ProductName    string
 	BestBeforeDate string
 }
+
+type StockEntry struct {
+	ProductName    string
+	Amount         float64
+	LocationID     int
+	BestBeforeDate string
+}
