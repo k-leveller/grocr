@@ -438,8 +438,8 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.historyPos = next
 				m.input.SetValue(m.upcHistory[next])
 				m.input.CursorEnd()
+				return m, nil
 			}
-			return m, nil
 		}
 	case "down":
 		if m.historyPos >= 0 {
@@ -497,6 +497,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "ctrl+n":
 		m.input.SetValue("")
+		m.historyPos = -1
 		return m.startManualProductEntry()
 	case "enter":
 		val := strings.TrimSpace(m.input.Value())
@@ -508,6 +509,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "Invalid UPC: " + val
 			m.statusErr = true
 			m.input.SetValue("")
+			m.historyPos = -1
 			return m, nil
 		}
 		m.currentUPC = upc
