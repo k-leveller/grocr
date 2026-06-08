@@ -1256,9 +1256,22 @@ func (m Model) renderLookupView() string {
 	}
 
 	if m.stockInfo != nil && m.stockInfo.LastPrice > 0 {
-		lines = append(lines, fmt.Sprintf(" %s $%.2f",
+		unitName := ""
+		if m.defaults != nil {
+			for _, u := range m.defaults.QuantityUnits {
+				if u.ID == m.currentProduct.QuIDPurchase {
+					unitName = u.Name
+					break
+				}
+			}
+		}
+		priceLabel := fmt.Sprintf("$%.2f", m.stockInfo.LastPrice)
+		if unitName != "" {
+			priceLabel += "/" + unitName
+		}
+		lines = append(lines, fmt.Sprintf(" %s %s",
 			ui.StyleLabel.Render("Last price:"),
-			m.stockInfo.LastPrice))
+			priceLabel))
 	}
 
 	if m.offInfo != nil && m.offInfo.Name != "" {
