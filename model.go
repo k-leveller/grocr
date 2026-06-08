@@ -118,6 +118,7 @@ type Model struct {
 	recipeFulfillment map[int]api.RecipeFulfillment
 	recipeListLoaded  bool
 	recipeListCursor  int
+	recipeListSeq     int
 }
 
 // Messages
@@ -181,6 +182,7 @@ type linkBarcodeResultMsg struct {
 }
 
 type recipeListMsg struct {
+	seq         int
 	recipes     []api.Recipe
 	fulfillment map[int]api.RecipeFulfillment
 	err         error
@@ -420,6 +422,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case recipeListMsg:
+		if msg.seq != m.recipeListSeq {
+			return m, nil // stale result from a cancelled load
+		}
 		m.recipeListLoaded = true
 		if msg.err != nil {
 			if m.state == StateRecipeList {
@@ -428,8 +433,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		} else {
 			sort.Slice(msg.recipes, func(i, j int) bool {
-				si := recipeScore(msg.fulfillment[msg.recipes[i].ID])
-				sj := recipeScore(msg.fulfillment[msg.recipes[j].ID])
+				fi, hasi := msg.fulfillment[msg.recipes[i].ID]
+				fj, hasj := msg.fulfillment[msg.recipes[j].ID]
+				si := recipeScore(fi, hasi)
+				sj := recipeScore(fj, hasj)
 				if si != sj {
 					return si < sj
 				}
@@ -645,6 +652,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.recipeList = nil
 			m.recipeFulfillment = nil
 			m.recipeListCursor = 0
+			m.recipeListSeq++
 			m.input.Blur()
 			return m, m.loadRecipeList()
 		}
@@ -785,13 +793,14 @@ func (m Model) loadMealPlan() tea.Cmd {
 }
 
 func (m Model) loadRecipeList() tea.Cmd {
+	seq := m.recipeListSeq
 	return func() tea.Msg {
 		if m.testMode {
-			return recipeListMsg{recipes: []api.Recipe{}, fulfillment: map[int]api.RecipeFulfillment{}}
+			return recipeListMsg{seq: seq, recipes: []api.Recipe{}, fulfillment: map[int]api.RecipeFulfillment{}}
 		}
 		recipes, err := m.grocy.GetRecipes()
 		if err != nil {
-			return recipeListMsg{err: err}
+			return recipeListMsg{seq: seq, err: err}
 		}
 		fulfillment := make(map[int]api.RecipeFulfillment, len(recipes))
 		for _, r := range recipes {
@@ -800,18 +809,23 @@ func (m Model) loadRecipeList() tea.Cmd {
 				fulfillment[r.ID] = *f
 			}
 		}
-		return recipeListMsg{recipes: recipes, fulfillment: fulfillment}
+		return recipeListMsg{seq: seq, recipes: recipes, fulfillment: fulfillment}
 	}
 }
 
-func recipeScore(f api.RecipeFulfillment) int {
+// recipeScore returns a sort key: 0=fulfillable, 1=fulfillable with shopping list,
+// 2=no fulfillment data, 3=not fulfillable.
+func recipeScore(f api.RecipeFulfillment, hasData bool) int {
+	if !hasData {
+		return 2
+	}
 	if f.NeedFulfilled {
 		return 0
 	}
 	if f.NeedFulfilledWithShoppingList {
 		return 1
 	}
-	return 2
+	return 3
 }
 
 func (m Model) handleRecipeListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -834,6 +848,7 @@ func (m Model) handleRecipeListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.recipeList = nil
 		m.recipeFulfillment = nil
 		m.recipeListCursor = 0
+		m.recipeListSeq++
 		return m, m.loadRecipeList()
 	}
 	return m, nil
