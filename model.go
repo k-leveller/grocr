@@ -32,6 +32,7 @@ const (
 	StateSearch
 	StateEditName
 	StateLookupView
+	StateShoppingListPrompt
 )
 
 type Model struct {
@@ -94,8 +95,14 @@ type lookupResultMsg struct {
 }
 
 type actionResultMsg struct {
-	entry ui.LogEntry
-	err   error
+	entry       ui.LogEntry
+	err         error
+	zeroedStock bool
+}
+
+type shoppingListMsg struct {
+	productName string
+	err         error
 }
 
 type stockInfoMsg struct {
@@ -272,6 +279,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.statusMsg = ""
 		}
+		if msg.err == nil && msg.zeroedStock && m.currentProduct != nil {
+			m.state = StateShoppingListPrompt
+			return m, nil
+		}
 		m.state = StateIdle
 		m.currentProduct = nil
 		m.offInfo = nil
@@ -282,6 +293,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.loadExpiringSoon())
 		}
 		return m, tea.Batch(cmds...)
+
+	case shoppingListMsg:
+		if msg.err != nil {
+			logger.LogError("shopping list: " + msg.err.Error())
+			m.statusMsg = "Shopping list error: " + msg.err.Error()
+			m.statusErr = true
+		} else {
+			logger.LogShoppingList(msg.productName)
+			m.statusMsg = msg.productName + " added to shopping list"
+			m.statusErr = false
+		}
+		return m, nil
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -342,6 +365,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleEditNameKey(msg)
 	case StateLookupView:
 		return m.handleLookupViewKey(msg)
+	case StateShoppingListPrompt:
+		return m.handleShoppingListKey(msg)
 	}
 
 	return m, nil
@@ -505,7 +530,8 @@ func (m Model) loadStockForConsume() tea.Cmd {
 			Success:     err == nil,
 			Time:        time.Now(),
 		}
-		return actionResultMsg{entry: entry, err: err}
+		zeroedStock := err == nil && info.StockAmount-1 <= 0
+		return actionResultMsg{entry: entry, err: err, zeroedStock: zeroedStock}
 	}
 }
 
@@ -833,6 +859,31 @@ func (m Model) handleLookupViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.input.Focus()
 	}
 	return m, nil
+}
+
+func (m Model) handleShoppingListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var shoppingCmd tea.Cmd
+	if msg.String() == "y" || msg.String() == "Y" {
+		shoppingCmd = m.addToShoppingList()
+	}
+	m.state = StateIdle
+	m.currentProduct = nil
+	m.offInfo = nil
+	m.stockInfo = nil
+	m.input.SetValue("")
+	cmds := []tea.Cmd{m.input.Focus(), m.loadExpiringSoon()}
+	if shoppingCmd != nil {
+		cmds = append(cmds, shoppingCmd)
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) addToShoppingList() tea.Cmd {
+	product := m.currentProduct
+	return func() tea.Msg {
+		err := m.grocy.AddToShoppingList(product.ID)
+		return shoppingListMsg{productName: product.Name, err: err}
+	}
 }
 
 func (m Model) submitForm() tea.Cmd {
@@ -1204,6 +1255,8 @@ func (m Model) renderInputLine() string {
 		return " > " + m.input.View()
 	case StateLookupView:
 		return " " + ui.StyleHint.Render("Esc or Enter to dismiss")
+	case StateShoppingListPrompt:
+		return " " + ui.StyleHint.Render("y = yes, any other key = no")
 	default:
 		if m.loading {
 			return " " + ui.StyleHint.Render("loading...")
@@ -1251,6 +1304,14 @@ func (m Model) renderMainContent(width int) string {
 		sections = append(sections, m.search.View())
 	case StateLookupView:
 		sections = append(sections, m.renderLookupView())
+	case StateShoppingListPrompt:
+		if m.currentProduct != nil {
+			sections = append(sections, fmt.Sprintf(" %s %s",
+				ui.StyleBold.Render("Consumed:"), m.currentProduct.Name))
+			sections = append(sections, " "+ui.StyleWarning.Render("Stock is now zero."))
+			sections = append(sections, "")
+			sections = append(sections, " Add to shopping list? [y/N]")
+		}
 	}
 
 	return strings.Join(sections, "\n")

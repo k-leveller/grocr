@@ -348,6 +348,16 @@ func (c *GrocyClient) SetUserfields(entity string, objectID int, fields map[stri
 	return err
 }
 
+func (c *GrocyClient) AddToShoppingList(productID int) error {
+	data := map[string]interface{}{
+		"product_id":     productID,
+		"list_id":        1,
+		"product_amount": 1,
+	}
+	_, err := c.request("POST", "/stock/shoppinglist/add-product", data, nil)
+	return err
+}
+
 func (c *GrocyClient) GetExpiringSoon(withinDays int) ([]ExpiringItem, error) {
 	data, err := c.request("GET", "/stock", nil, nil)
 	if err != nil {
