@@ -2123,20 +2123,17 @@ func (m Model) renderExpiringSoonPanel(bodyH int) string {
 		t, _ := time.Parse("2006-01-02", item.BestBeforeDate)
 		days := int(t.Sub(today).Hours() / 24)
 
-		var daysText string
+		daysText := fmt.Sprintf("%2dd", days)
 		var daysStyle lipgloss.Style
 		switch {
 		case days < 0:
 			daysText = "exp"
 			daysStyle = ui.StyleError
 		case days <= 3:
-			daysText = fmt.Sprintf("%2dd", days)
-			daysStyle = ui.StyleExpiryOrange
+			daysStyle = ui.StyleOrange
 		case days <= 7:
-			daysText = fmt.Sprintf("%2dd", days)
 			daysStyle = ui.StyleWarning
 		default:
-			daysText = fmt.Sprintf("%2dd", days)
 			daysStyle = ui.StyleHint
 		}
 

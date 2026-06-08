@@ -36,8 +36,8 @@ var (
 	StyleError = lipgloss.NewStyle().
 			Foreground(ColorRed)
 
-	StyleExpiryOrange = lipgloss.NewStyle().
-				Foreground(ColorOrange)
+	StyleOrange = lipgloss.NewStyle().
+			Foreground(ColorOrange)
 
 	StyleWarning = lipgloss.NewStyle().
 			Foreground(ColorYellow)
