@@ -5,6 +5,7 @@ import "github.com/charmbracelet/lipgloss"
 var (
 	ColorGreen  = lipgloss.Color("#00cc66")
 	ColorRed    = lipgloss.Color("#ff4444")
+	ColorOrange = lipgloss.Color("#ff8800")
 	ColorYellow = lipgloss.Color("#ffcc00")
 	ColorCyan   = lipgloss.Color("#00cccc")
 	ColorDim    = lipgloss.Color("#666666")
@@ -34,6 +35,9 @@ var (
 
 	StyleError = lipgloss.NewStyle().
 			Foreground(ColorRed)
+
+	StyleExpiryOrange = lipgloss.NewStyle().
+				Foreground(ColorOrange)
 
 	StyleWarning = lipgloss.NewStyle().
 			Foreground(ColorYellow)

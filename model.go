@@ -220,7 +220,7 @@ func (m Model) loadExpiringSoon() tea.Cmd {
 		if m.testMode {
 			return expiringSoonMsg{}
 		}
-		items, err := m.grocy.GetExpiringSoon(7)
+		items, err := m.grocy.GetExpiringSoon(14)
 		return expiringSoonMsg{items: items, err: err}
 	}
 }
@@ -2109,7 +2109,7 @@ func (m Model) renderExpiringSoonPanel(bodyH int) string {
 	}
 
 	if len(m.expiringSoon) == 0 {
-		lines = append(lines, " "+ui.StyleHint.Render("None this week"))
+		lines = append(lines, " "+ui.StyleHint.Render("None expiring soon"))
 		return strings.Join(lines, "\n")
 	}
 
@@ -2129,15 +2129,15 @@ func (m Model) renderExpiringSoonPanel(bodyH int) string {
 		case days < 0:
 			daysText = "exp"
 			daysStyle = ui.StyleError
-		case days == 0:
-			daysText = " 0d"
-			daysStyle = ui.StyleError
-		case days <= 2:
+		case days <= 3:
+			daysText = fmt.Sprintf("%2dd", days)
+			daysStyle = ui.StyleExpiryOrange
+		case days <= 7:
 			daysText = fmt.Sprintf("%2dd", days)
 			daysStyle = ui.StyleWarning
 		default:
 			daysText = fmt.Sprintf("%2dd", days)
-			daysStyle = ui.StyleInfo
+			daysStyle = ui.StyleHint
 		}
 
 		name := item.ProductName
