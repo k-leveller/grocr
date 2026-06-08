@@ -568,10 +568,32 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.expPanelCursor = min(m.expPanelCursor+1, len(m.expiringSoon)-1)
 			return m, nil
 		}
+		if m.historyPos >= 0 {
+			next := m.historyPos - 1
+			if next < 0 {
+				m.input.SetValue(m.historySave)
+				m.input.CursorEnd()
+				m.historyPos = -1
+			} else {
+				m.historyPos = next
+				m.input.SetValue(m.upcHistory[next])
+				m.input.CursorEnd()
+			}
+			return m, nil
+		}
 	case "k":
 		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
 			m.expPanelCursor = max(m.expPanelCursor-1, 0)
 			return m, nil
+		}
+		if m.historyPos >= 0 {
+			next := m.historyPos + 1
+			if next < len(m.upcHistory) {
+				m.historyPos = next
+				m.input.SetValue(m.upcHistory[next])
+				m.input.CursorEnd()
+				return m, nil
+			}
 		}
 	case "up":
 		if len(m.upcHistory) > 0 {
@@ -586,6 +608,10 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
+			m.expPanelCursor = max(m.expPanelCursor-1, 0)
+			return m, nil
+		}
 	case "down":
 		if m.historyPos >= 0 {
 			next := m.historyPos - 1
@@ -598,6 +624,10 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.input.SetValue(m.upcHistory[next])
 				m.input.CursorEnd()
 			}
+			return m, nil
+		}
+		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
+			m.expPanelCursor = min(m.expPanelCursor+1, len(m.expiringSoon)-1)
 			return m, nil
 		}
 	case "d":
@@ -1997,13 +2027,13 @@ func (m Model) renderInputLine() string {
 	case StateTransfer:
 		return " " + ui.StyleHint.Render("Tab/↓ next field  •  Enter submit  •  Esc cancel")
 	case StatePriceHistory:
-		return " " + ui.StyleHint.Render("j/k = navigate  •  Esc/p = back")
+		return " " + ui.StyleHint.Render("↑/↓/j/k = navigate  •  Esc/p = back")
 	case StateMealPlan:
-		return " " + ui.StyleHint.Render("j/k = scroll  •  r = refresh  •  Esc/q = back")
+		return " " + ui.StyleHint.Render("↑/↓/j/k = scroll  •  r = refresh  •  Esc/q = back")
 	case StateTodayMealPlan:
 		return " " + ui.StyleHint.Render("r = refresh  •  Esc/q = back")
 	case StateRecipeList:
-		return " " + ui.StyleHint.Render("j/k = navigate  •  r = refresh  •  Esc/q = back")
+		return " " + ui.StyleHint.Render("↑/↓/j/k = navigate  •  r = refresh  •  Esc/q = back")
 	case StateEditNotes:
 		return " " + ui.StyleHint.Render("Enter to save  •  Esc to cancel")
 	case StateShoppingListPrompt:

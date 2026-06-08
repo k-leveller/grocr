@@ -16,8 +16,8 @@ func RenderHelp(width, height int) string {
 		"  p       Price history (lookup view)\n" +
 		"  t       Transfer stock between locations (lookup view)\n" +
 		"  ?       Toggle this help\n" +
-		"  ↑/↓     Cycle UPC scan history (idle input)\n" +
-		"  j/k     Navigate expiring-soon panel\n" +
+		"  ↑/k     Older UPC history entry (or expiry panel up when no history)\n" +
+		"  ↓/j     Newer UPC history entry (or expiry panel down)\n" +
 		"  d       Mark as spoiled (expiring-soon panel)\n" +
 		"  Tab/↓   Next field (form)\n" +
 		"  S-Tab/↑ Previous field (form)\n" +
