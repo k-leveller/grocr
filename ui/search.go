@@ -160,7 +160,7 @@ func (s *Search) View() string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, " "+StyleHint.Render("↑/↓ navigate · Tab filter location · Enter select · Ctrl+N new · Esc cancel"))
+	lines = append(lines, " "+StyleHint.Render("↑/↓ navigate · Tab filter location · Enter select · n new · Esc cancel"))
 
 	return strings.Join(lines, "\n")
 }

@@ -668,16 +668,17 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.input.Blur()
 			return m, nil
 		}
-	case "ctrl+e":
+	case "x":
 		if m.input.Value() == "" {
 			m.loading = true
 			m.statusMsg = ""
 			return m, m.doExport()
 		}
-	case "ctrl+n":
-		m.input.SetValue("")
-		m.historyPos = -1
-		return m.startManualProductEntry()
+	case "n":
+		if m.input.Value() == "" {
+			m.historyPos = -1
+			return m.startManualProductEntry()
+		}
 	case "r":
 		if m.input.Value() == "" {
 			m.state = StateRecipeList
@@ -1279,7 +1280,7 @@ func (m Model) handleConsumeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "ctrl+n" {
+	if msg.String() == "n" {
 		if !m.linkBarcode {
 			return m.startManualProductEntry()
 		}

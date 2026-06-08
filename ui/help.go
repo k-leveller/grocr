@@ -7,8 +7,8 @@ func RenderHelp(width, height int) string {
 		"  q       Quit\n" +
 		"  m       Toggle Add/Consume mode\n" +
 		"  /       Search products by name\n" +
-		"  Ctrl+N  New product (no barcode)\n" +
-		"  Ctrl+E  Export stock to CSV\n" +
+		"  n       New product (no barcode)\n" +
+		"  x       Export stock to CSV\n" +
 		"  t       Today's meal plan (compact)\n" +
 		"  P       Meal plan (next 7 days, scrollable)\n" +
 		"  r       Recipe list (fulfillability)\n" +
