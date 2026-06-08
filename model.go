@@ -681,10 +681,12 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.input.Value() == "" {
 			m.state = StateSearch
 			var locs []api.Location
+			var units []api.QuantityUnit
 			if m.defaults != nil {
 				locs = m.defaults.Locations
+				units = m.defaults.QuantityUnits
 			}
-			m.search = ui.NewSearch(m.allProducts, locs, m.stockAmounts, m.mode == "lookup")
+			m.search = ui.NewSearch(m.allProducts, locs, units, m.stockAmounts, m.mode == "lookup")
 			m.input.Blur()
 			return m, nil
 		}
@@ -1363,10 +1365,12 @@ func (m Model) handleUnknownBarcodeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.linkBarcode = true
 		m.state = StateSearch
 		var locs []api.Location
+		var units []api.QuantityUnit
 		if m.defaults != nil {
 			locs = m.defaults.Locations
+			units = m.defaults.QuantityUnits
 		}
-		m.search = ui.NewSearch(m.allProducts, locs, m.stockAmounts, false)
+		m.search = ui.NewSearch(m.allProducts, locs, units, m.stockAmounts, false)
 		return m, nil
 	case "esc":
 		m.state = StateIdle
