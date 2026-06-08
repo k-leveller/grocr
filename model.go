@@ -314,12 +314,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusErr = true
 		} else {
 			m.logEntries = append([]ui.LogEntry{msg.entry}, m.logEntries...)
-			if msg.entry.Action == "consume" {
+			switch msg.entry.Action {
+			case "consume":
 				logger.LogConsume(msg.entry.ProductName, msg.entry.Quantity)
-			} else {
+				m.statusMsg = ""
+			case "spoiled":
+				logger.LogConsume(msg.entry.ProductName, msg.entry.Quantity)
+				m.statusMsg = "Spoiled: " + msg.entry.ProductName
+				m.statusErr = false
+			default:
 				logger.LogAdd(msg.entry.ProductName, msg.entry.Quantity, msg.entry.Location, msg.entry.Expiry)
+				m.statusMsg = ""
 			}
-			m.statusMsg = ""
 		}
 		if msg.err == nil && msg.zeroedStock && m.currentProduct != nil {
 			m.state = StateShoppingListPrompt
@@ -485,7 +491,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case "d":
-		if m.input.Value() == "" && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
+		if !m.loading && m.input.Value() == "" && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
 			item := m.expiringSoon[m.expPanelCursor]
 			var product *api.Product
 			for i := range m.allProducts {
@@ -689,7 +695,7 @@ func (m Model) consumeFromPanel(item api.ExpiringItem, product *api.Product) tea
 		entry := ui.LogEntry{
 			ProductName: item.ProductName,
 			Quantity:    1,
-			Action:      "consume",
+			Action:      "spoiled",
 			Success:     err == nil,
 			Time:        time.Now(),
 		}

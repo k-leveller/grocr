@@ -11,7 +11,7 @@ type LogEntry struct {
 	Quantity    float64
 	Location    string
 	Expiry      string
-	Action      string // "add" or "consume"
+	Action      string // "add", "consume", or "spoiled"
 	Success     bool
 	Time        time.Time
 }
@@ -41,6 +41,8 @@ func RenderLog(entries []LogEntry, maxLines int) string {
 		var detail string
 		if e.Action == "consume" {
 			detail = fmt.Sprintf("%s %s x%g consumed", icon, e.ProductName, e.Quantity)
+		} else if e.Action == "spoiled" {
+			detail = fmt.Sprintf("%s %s x%g spoiled", icon, e.ProductName, e.Quantity)
 		} else {
 			parts := []string{fmt.Sprintf("%s %s x%g", icon, e.ProductName, e.Quantity)}
 			if e.Location != "" {
