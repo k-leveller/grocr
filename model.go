@@ -485,7 +485,11 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "/":
 		if m.input.Value() == "" {
 			m.state = StateSearch
-			m.search = ui.NewSearch(m.allProducts)
+			var locs []api.Location
+			if m.defaults != nil {
+				locs = m.defaults.Locations
+			}
+			m.search = ui.NewSearch(m.allProducts, locs)
 			m.input.Blur()
 			return m, nil
 		}

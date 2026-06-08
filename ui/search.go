@@ -12,6 +12,8 @@ import (
 type Search struct {
 	Input      textinput.Model
 	Products   []api.Product
+	Locations  []api.Location
+	LocFilter  int // 0 = all; otherwise a location ID
 	Filtered   []api.Product
 	Cursor     int
 	Selected   *api.Product
@@ -19,7 +21,7 @@ type Search struct {
 	MaxResults int
 }
 
-func NewSearch(products []api.Product) Search {
+func NewSearch(products []api.Product, locations []api.Location) Search {
 	ti := textinput.New()
 	ti.Placeholder = "type to search..."
 	ti.Focus()
@@ -28,8 +30,30 @@ func NewSearch(products []api.Product) Search {
 	return Search{
 		Input:      ti,
 		Products:   products,
+		Locations:  locations,
 		MaxResults: 10,
 	}
+}
+
+func (s *Search) cycleLocation() {
+	if len(s.Locations) == 0 {
+		return
+	}
+	if s.LocFilter == 0 {
+		s.LocFilter = s.Locations[0].ID
+		return
+	}
+	for i, loc := range s.Locations {
+		if loc.ID == s.LocFilter {
+			if i+1 < len(s.Locations) {
+				s.LocFilter = s.Locations[i+1].ID
+			} else {
+				s.LocFilter = 0
+			}
+			return
+		}
+	}
+	s.LocFilter = 0
 }
 
 func (s *Search) Update(msg tea.Msg) tea.Cmd {
@@ -54,6 +78,10 @@ func (s *Search) Update(msg tea.Msg) tea.Cmd {
 				s.Cursor--
 			}
 			return nil
+		case "tab":
+			s.cycleLocation()
+			s.filter()
+			return nil
 		}
 	}
 
@@ -68,7 +96,7 @@ func (s *Search) Update(msg tea.Msg) tea.Cmd {
 
 func (s *Search) filter() {
 	query := strings.ToLower(s.Input.Value())
-	if query == "" {
+	if query == "" && s.LocFilter == 0 {
 		s.Filtered = nil
 		s.Cursor = 0
 		return
@@ -76,11 +104,15 @@ func (s *Search) filter() {
 
 	var results []api.Product
 	for _, p := range s.Products {
-		if strings.Contains(strings.ToLower(p.Name), query) {
-			results = append(results, p)
-			if len(results) >= s.MaxResults {
-				break
-			}
+		if s.LocFilter != 0 && p.LocationID != s.LocFilter {
+			continue
+		}
+		if query != "" && !strings.Contains(strings.ToLower(p.Name), query) {
+			continue
+		}
+		results = append(results, p)
+		if len(results) >= s.MaxResults {
+			break
 		}
 	}
 	s.Filtered = results
@@ -89,13 +121,33 @@ func (s *Search) filter() {
 	}
 }
 
+func (s *Search) locFilterName() string {
+	if s.LocFilter == 0 {
+		return "all locations"
+	}
+	for _, loc := range s.Locations {
+		if loc.ID == s.LocFilter {
+			return loc.Name
+		}
+	}
+	return "unknown"
+}
+
 func (s *Search) View() string {
 	var lines []string
-	lines = append(lines, " "+StyleBold.Render("Search:")+" "+s.Input.View())
+
+	header := " " + StyleBold.Render("Search:") + " " + s.Input.View()
+	if len(s.Locations) > 0 {
+		locLabel := StyleInfo.Render(s.locFilterName())
+		header += "  " + StyleHint.Render("[Tab: "+locLabel+"]")
+	}
+	lines = append(lines, header)
 	lines = append(lines, "")
 
-	if len(s.Filtered) == 0 {
-		if s.Input.Value() != "" {
+	noResults := len(s.Filtered) == 0
+	hasQuery := s.Input.Value() != "" || s.LocFilter != 0
+	if noResults {
+		if hasQuery {
 			lines = append(lines, " "+StyleHint.Render("No matches"))
 		}
 	} else {
@@ -109,7 +161,7 @@ func (s *Search) View() string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, " "+StyleHint.Render("↑/↓ to navigate, Enter to select, Ctrl+N new product, Esc to cancel"))
+	lines = append(lines, " "+StyleHint.Render("↑/↓ navigate · Tab filter location · Enter select · Ctrl+N new · Esc cancel"))
 
 	return strings.Join(lines, "\n")
 }
