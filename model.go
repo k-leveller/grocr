@@ -592,8 +592,8 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.historyPos = next
 				m.input.SetValue(m.upcHistory[next])
 				m.input.CursorEnd()
-				return m, nil
 			}
+			return m, nil
 		}
 	case "up":
 		if len(m.upcHistory) > 0 {
