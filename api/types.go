@@ -47,7 +47,13 @@ type Defaults struct {
 }
 
 type OFFProduct struct {
-	Name         string
-	Categories   string
+	Name          string
+	Categories    string
 	ShelfLifeDays *int
+}
+
+type ExpiringItem struct {
+	ProductID      int
+	ProductName    string
+	BestBeforeDate string
 }

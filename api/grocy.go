@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -345,4 +346,48 @@ func (c *GrocyClient) GetStock(productID int) (*StockInfo, error) {
 func (c *GrocyClient) SetUserfields(entity string, objectID int, fields map[string]string) error {
 	_, err := c.request("PUT", fmt.Sprintf("/userfields/%s/%d", entity, objectID), fields, nil)
 	return err
+}
+
+func (c *GrocyClient) GetExpiringSoon(withinDays int) ([]ExpiringItem, error) {
+	data, err := c.request("GET", "/stock", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var raw []struct {
+		ProductID      int    `json:"product_id"`
+		BestBeforeDate string `json:"best_before_date"`
+		Product        struct {
+			Name string `json:"name"`
+		} `json:"product"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+
+	threshold := time.Now().AddDate(0, 0, withinDays)
+	var result []ExpiringItem
+	for _, e := range raw {
+		if e.BestBeforeDate == "" || e.BestBeforeDate == "2999-12-31" {
+			continue
+		}
+		t, err := time.Parse("2006-01-02", e.BestBeforeDate)
+		if err != nil {
+			continue
+		}
+		if t.After(threshold) {
+			continue
+		}
+		result = append(result, ExpiringItem{
+			ProductID:      e.ProductID,
+			ProductName:    e.Product.Name,
+			BestBeforeDate: e.BestBeforeDate,
+		})
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].BestBeforeDate < result[j].BestBeforeDate
+	})
+
+	return result, nil
 }

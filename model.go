@@ -16,6 +16,11 @@ import (
 	"github.com/kevin/grocy-scanner/ui"
 )
 
+const (
+	expPanelWidth    = 28
+	expPanelMinWidth = 100
+)
+
 type AppState int
 
 const (
@@ -67,13 +72,17 @@ type Model struct {
 	// Log
 	logEntries []ui.LogEntry
 
+	// Expiring soon panel
+	expiringSoon       []api.ExpiringItem
+	expiringSoonLoaded bool
+
 	// Status message
 	statusMsg string
 	statusErr bool
 
 	// Loading
-	loading    bool
-	lookupSeq  int
+	loading   bool
+	lookupSeq int
 }
 
 // Messages
@@ -96,6 +105,11 @@ type stockInfoMsg struct {
 
 type productsLoadedMsg struct {
 	products []api.Product
+}
+
+type expiringSoonMsg struct {
+	items []api.ExpiringItem
+	err   error
 }
 
 type defaultsLoadedMsg struct {
@@ -124,7 +138,18 @@ func (m Model) Init() tea.Cmd {
 		textinput.Blink,
 		m.loadDefaults(),
 		m.loadProducts(),
+		m.loadExpiringSoon(),
 	)
+}
+
+func (m Model) loadExpiringSoon() tea.Cmd {
+	return func() tea.Msg {
+		if m.testMode {
+			return expiringSoonMsg{}
+		}
+		items, err := m.grocy.GetExpiringSoon(7)
+		return expiringSoonMsg{items: items, err: err}
+	}
 }
 
 func (m Model) loadDefaults() tea.Cmd {
@@ -202,6 +227,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.allProducts = msg.products
 		return m, nil
 
+	case expiringSoonMsg:
+		m.expiringSoonLoaded = true
+		if msg.err == nil {
+			m.expiringSoon = msg.items
+		}
+		return m, nil
+
 	case lookupResultMsg:
 		if msg.seq != m.lookupSeq {
 			return m, nil // stale result from a cancelled lookup
@@ -245,7 +277,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.offInfo = nil
 		m.stockInfo = nil
 		m.input.SetValue("")
-		return m, m.input.Focus()
+		return m, tea.Batch(m.input.Focus(), m.loadExpiringSoon())
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -1127,25 +1159,64 @@ func (m Model) View() string {
 		return ui.RenderHelp(m.width, m.height)
 	}
 
+	header := ui.RenderHeader(m.mode, m.width)
+	hSep := ui.StyleSeparator.Render(strings.Repeat("─", m.width))
+	bSep := ui.StyleSeparator.Render(strings.Repeat("─", m.width))
+
+	// header + hSep + bSep + inputLine = 4 fixed lines
+	bodyH := m.height - 4
+	if bodyH < 1 {
+		bodyH = 1
+	}
+
+	var body string
+	if m.width >= expPanelMinWidth {
+		mainW := m.width - expPanelWidth - 1
+		mainContent := m.renderMainContent(mainW)
+		panelContent := m.renderExpiringSoonPanel(bodyH)
+
+		mainBlock := lipgloss.NewStyle().Width(mainW).Height(bodyH).Render(mainContent)
+
+		var sepLines []string
+		for i := 0; i < bodyH; i++ {
+			sepLines = append(sepLines, ui.StyleSeparator.Render("│"))
+		}
+		sepBlock := strings.Join(sepLines, "\n")
+
+		panelBlock := lipgloss.NewStyle().Width(expPanelWidth).Height(bodyH).Render(panelContent)
+
+		body = lipgloss.JoinHorizontal(lipgloss.Top, mainBlock, sepBlock, panelBlock)
+	} else {
+		mainContent := m.renderMainContent(m.width)
+		body = lipgloss.NewStyle().Height(bodyH).Render(mainContent)
+	}
+
+	return strings.Join([]string{header, hSep, body, bSep, m.renderInputLine()}, "\n")
+}
+
+func (m Model) renderInputLine() string {
+	switch m.state {
+	case StateIdle:
+		return " > " + m.input.View()
+	case StateLookupView:
+		return " " + ui.StyleHint.Render("Esc or Enter to dismiss")
+	default:
+		if m.loading {
+			return " " + ui.StyleHint.Render("loading...")
+		}
+		return " " + ui.StyleHint.Render("(form active)")
+	}
+}
+
+func (m Model) renderMainContent(width int) string {
 	var sections []string
 
-	// Header
-	header := ui.RenderHeader(m.mode, m.width)
-	sections = append(sections, header)
-	sections = append(sections, ui.StyleSeparator.Render(strings.Repeat("─", m.width)))
-
-	// Log
 	maxLogLines := 5
 	if logView := ui.RenderLog(m.logEntries, maxLogLines); logView != "" {
 		sections = append(sections, logView)
+		sections = append(sections, ui.StyleSeparator.Render(strings.Repeat("─", width)))
 	}
 
-	// Separator between log and current scan
-	if len(m.logEntries) > 0 {
-		sections = append(sections, ui.StyleSeparator.Render(strings.Repeat("─", m.width)))
-	}
-
-	// Main content area
 	switch m.state {
 	case StateIdle:
 		if m.statusMsg != "" {
@@ -1182,27 +1253,66 @@ func (m Model) View() string {
 		sections = append(sections, m.renderLookupView())
 	}
 
-	// Fill remaining space
-	content := strings.Join(sections, "\n")
-	contentHeight := lipgloss.Height(content)
-	remainingHeight := m.height - contentHeight - 2 // 2 for input bar + separator
-	if remainingHeight > 0 {
-		content += strings.Repeat("\n", remainingHeight)
+	return strings.Join(sections, "\n")
+}
+
+func (m Model) renderExpiringSoonPanel(bodyH int) string {
+	const daysColW = 3
+	nameColW := expPanelWidth - 2 - daysColW // 1 for " " prefix, 1 for " " before days
+
+	var lines []string
+	lines = append(lines, " "+ui.StyleBold.Render("Expiring Soon"))
+	lines = append(lines, " "+ui.StyleSeparator.Render(strings.Repeat("─", expPanelWidth-2)))
+
+	if !m.expiringSoonLoaded {
+		lines = append(lines, " "+ui.StyleHint.Render("Loading..."))
+		return strings.Join(lines, "\n")
 	}
 
-	// Input bar at bottom
-	inputBar := ui.StyleSeparator.Render(strings.Repeat("─", m.width)) + "\n"
-	if m.state == StateIdle {
-		inputBar += " > " + m.input.View()
-	} else if m.state == StateLookupView {
-		inputBar += " " + ui.StyleHint.Render("Esc or Enter to dismiss")
-	} else if m.loading {
-		inputBar += " " + ui.StyleHint.Render("loading...")
-	} else {
-		inputBar += " " + ui.StyleHint.Render("(form active)")
+	if len(m.expiringSoon) == 0 {
+		lines = append(lines, " "+ui.StyleHint.Render("None this week"))
+		return strings.Join(lines, "\n")
 	}
 
-	return content + "\n" + inputBar
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	maxItems := bodyH - 2
+	for i, item := range m.expiringSoon {
+		if i >= maxItems {
+			break
+		}
+
+		t, _ := time.Parse("2006-01-02", item.BestBeforeDate)
+		days := int(t.Sub(today).Hours() / 24)
+
+		var daysText string
+		var daysStyle lipgloss.Style
+		switch {
+		case days < 0:
+			daysText = "exp"
+			daysStyle = ui.StyleError
+		case days == 0:
+			daysText = " 0d"
+			daysStyle = ui.StyleError
+		case days <= 2:
+			daysText = fmt.Sprintf("%2dd", days)
+			daysStyle = ui.StyleWarning
+		default:
+			daysText = fmt.Sprintf("%2dd", days)
+			daysStyle = ui.StyleInfo
+		}
+
+		name := item.ProductName
+		runes := []rune(name)
+		if len(runes) > nameColW {
+			name = string(runes[:nameColW-1]) + "…"
+		} else if len(runes) < nameColW {
+			name += strings.Repeat(" ", nameColW-len(runes))
+		}
+
+		lines = append(lines, " "+name+" "+daysStyle.Render(daysText))
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) renderLookupView() string {
