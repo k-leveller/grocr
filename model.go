@@ -42,6 +42,7 @@ const (
 	StateMealPlan
 	StateUnknownBarcode
 	StateRecipeList
+	StateTodayMealPlan
 )
 
 type Model struct {
@@ -534,6 +535,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleTransferFormKey(msg)
 	case StateMealPlan:
 		return m.handleMealPlanKey(msg)
+	case StateTodayMealPlan:
+		return m.handleTodayMealPlanKey(msg)
 	case StateUnknownBarcode:
 		return m.handleUnknownBarcodeKey(msg)
 	case StateRecipeList:
@@ -667,6 +670,15 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.loadMealPlan()
 		}
 		return m, nil
+	case "t":
+		if m.input.Value() == "" {
+			m.state = StateTodayMealPlan
+			m.mealPlanLoaded = false
+			m.mealPlan = nil
+			m.mealPlanRecipes = nil
+			m.input.Blur()
+			return m, m.loadMealPlan()
+		}
 	case "enter":
 		val := strings.TrimSpace(m.input.Value())
 		if val == "" {
@@ -1491,6 +1503,22 @@ func (m Model) handleMealPlanKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleTodayMealPlanKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q":
+		m.state = StateIdle
+		m.statusMsg = ""
+		m.statusErr = false
+		return m, m.input.Focus()
+	case "r":
+		m.mealPlanLoaded = false
+		m.mealPlan = nil
+		m.mealPlanRecipes = nil
+		return m, m.loadMealPlan()
+	}
+	return m, nil
+}
+
 func (m Model) handleShoppingListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var shoppingCmd tea.Cmd
 	if msg.String() == "y" || msg.String() == "Y" {
@@ -1964,6 +1992,8 @@ func (m Model) renderInputLine() string {
 		return " " + ui.StyleHint.Render("j/k = navigate  •  Esc/p = back")
 	case StateMealPlan:
 		return " " + ui.StyleHint.Render("j/k = scroll  •  r = refresh  •  Esc/q = back")
+	case StateTodayMealPlan:
+		return " " + ui.StyleHint.Render("r = refresh  •  Esc/q = back")
 	case StateRecipeList:
 		return " " + ui.StyleHint.Render("j/k = navigate  •  r = refresh  •  Esc/q = back")
 	case StateEditNotes:
@@ -2041,6 +2071,8 @@ func (m Model) renderMainContent(width, bodyH int) string {
 		sections = append(sections, m.renderPriceHistoryView(bodyH))
 	case StateMealPlan:
 		sections = append(sections, m.renderMealPlanView(bodyH))
+	case StateTodayMealPlan:
+		sections = append(sections, m.renderTodayMealPlanView())
 	case StateRecipeList:
 		sections = append(sections, m.renderRecipeListView(bodyH))
 	case StateShoppingListPrompt:
@@ -2378,34 +2410,8 @@ func (m Model) renderMealPlanView(bodyH int) string {
 		content = append(content, " "+ui.StyleLabel.Render(dayLabel))
 
 		for _, item := range g.items {
-			var desc string
-			switch {
-			case item.RecipeID != nil:
-				name, ok := m.mealPlanRecipes[*item.RecipeID]
-				if !ok {
-					name = fmt.Sprintf("Recipe #%d", *item.RecipeID)
-				}
-				if item.RecipeServings > 0 {
-					desc = fmt.Sprintf("%s  %s", name, ui.StyleHint.Render(fmt.Sprintf("(%.0f srv)", item.RecipeServings)))
-				} else {
-					desc = name
-				}
-			case item.ProductID != nil:
-				name := fmt.Sprintf("Product #%d", *item.ProductID)
-				for _, p := range m.allProducts {
-					if p.ID == *item.ProductID {
-						name = p.Name
-						break
-					}
-				}
-				if item.ProductAmount > 0 {
-					desc = fmt.Sprintf("%s  %s", name, ui.StyleHint.Render(fmt.Sprintf("×%.0f", item.ProductAmount)))
-				} else {
-					desc = name
-				}
-			case item.Note != "":
-				desc = item.Note
-			default:
+			desc := m.mealPlanItemDesc(item)
+			if desc == "" {
 				continue
 			}
 			content = append(content, "   • "+desc)
@@ -2436,6 +2442,132 @@ func (m Model) renderMealPlanView(bodyH int) string {
 		end = len(content)
 	}
 	lines = append(lines, content[offset:end]...)
+
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) mealPlanItemDesc(item api.MealPlanItem) string {
+	switch {
+	case item.RecipeID != nil:
+		name, ok := m.mealPlanRecipes[*item.RecipeID]
+		if !ok {
+			name = fmt.Sprintf("Recipe #%d", *item.RecipeID)
+		}
+		if item.RecipeServings > 0 {
+			return fmt.Sprintf("%s  %s", name, ui.StyleHint.Render(fmt.Sprintf("(%.0f srv)", item.RecipeServings)))
+		}
+		return name
+	case item.ProductID != nil:
+		name := fmt.Sprintf("Product #%d", *item.ProductID)
+		for _, p := range m.allProducts {
+			if p.ID == *item.ProductID {
+				name = p.Name
+				break
+			}
+		}
+		if item.ProductAmount > 0 {
+			return fmt.Sprintf("%s  %s", name, ui.StyleHint.Render(fmt.Sprintf("×%.0f", item.ProductAmount)))
+		}
+		return name
+	case item.Note != "":
+		return item.Note
+	}
+	return ""
+}
+
+func (m Model) renderTodayMealPlanView() string {
+	today := time.Now().Format("2006-01-02")
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+
+	var lines []string
+	lines = append(lines, fmt.Sprintf(" %s  %s",
+		ui.StyleBold.Render("Today's Meal Plan"),
+		ui.StyleHint.Render(time.Now().Format("Mon Jan 02"))))
+	lines = append(lines, "")
+
+	if !m.mealPlanLoaded {
+		lines = append(lines, " "+ui.StyleHint.Render("Loading..."))
+		return strings.Join(lines, "\n")
+	}
+
+	var todayItems []api.MealPlanItem
+	for _, item := range m.mealPlan {
+		if item.Day == today {
+			todayItems = append(todayItems, item)
+		}
+	}
+
+	if len(todayItems) == 0 {
+		lines = append(lines, " "+ui.StyleHint.Render("Nothing planned for today."))
+	} else {
+		for _, item := range todayItems {
+			desc := m.mealPlanItemDesc(item)
+			if desc == "" {
+				continue
+			}
+			lines = append(lines, "   • "+desc)
+			if item.Note != "" && (item.RecipeID != nil || item.ProductID != nil) {
+				lines = append(lines, "     "+ui.StyleHint.Render(item.Note))
+			}
+		}
+	}
+
+	// Compact week summary
+	type group struct {
+		day   string
+		items []api.MealPlanItem
+	}
+	var groups []group
+	dayIndex := map[string]int{}
+	for _, item := range m.mealPlan {
+		if item.Day == today {
+			continue
+		}
+		if idx, ok := dayIndex[item.Day]; ok {
+			groups[idx].items = append(groups[idx].items, item)
+		} else {
+			dayIndex[item.Day] = len(groups)
+			groups = append(groups, group{day: item.Day, items: []api.MealPlanItem{item}})
+		}
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, " "+ui.StyleBold.Render("This Week"))
+	lines = append(lines, "")
+
+	if len(groups) == 0 {
+		lines = append(lines, " "+ui.StyleHint.Render("No more meals planned this week."))
+	} else {
+		for _, g := range groups {
+			t, err := time.Parse("2006-01-02", g.day)
+			var dayLabel string
+			if err != nil {
+				dayLabel = g.day
+			} else if g.day == tomorrow {
+				dayLabel = "Tomorrow " + t.Format("Jan 02")
+			} else {
+				dayLabel = t.Format("Mon Jan 02")
+			}
+
+			var firstDesc string
+			for _, item := range g.items {
+				firstDesc = m.mealPlanItemDesc(item)
+				if firstDesc != "" {
+					break
+				}
+			}
+			extra := ""
+			if len(g.items) > 1 {
+				extra = ui.StyleHint.Render(fmt.Sprintf(" +%d more", len(g.items)-1))
+			}
+			if firstDesc != "" {
+				lines = append(lines, fmt.Sprintf("   %s  %s%s",
+					ui.StyleLabel.Render(dayLabel), firstDesc, extra))
+			} else {
+				lines = append(lines, "   "+ui.StyleLabel.Render(dayLabel))
+			}
+		}
+	}
 
 	return strings.Join(lines, "\n")
 }
