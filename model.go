@@ -1280,7 +1280,7 @@ func (m Model) handleConsumeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "n" {
+	if msg.String() == "n" && m.search.Input.Value() == "" {
 		if !m.linkBarcode {
 			return m.startManualProductEntry()
 		}
