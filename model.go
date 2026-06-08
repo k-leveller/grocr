@@ -87,6 +87,11 @@ type Model struct {
 	// Loading
 	loading   bool
 	lookupSeq int
+
+	// UPC scan history for up/down navigation in idle input
+	upcHistory  []string
+	historyPos  int    // -1 = not navigating; 0 = most recent
+	historySave string // input value saved when history nav begins
 }
 
 // Messages
@@ -139,12 +144,13 @@ func NewModel(grocy *api.GrocyClient, off *api.OFFClient, testMode bool) Model {
 	ti.CharLimit = 20
 
 	return Model{
-		state:    StateIdle,
-		mode:     "add",
-		input:    ti,
-		grocy:    grocy,
-		off:      off,
-		testMode: testMode,
+		state:      StateIdle,
+		mode:       "add",
+		input:      ti,
+		grocy:      grocy,
+		off:        off,
+		testMode:   testMode,
+		historyPos: -1,
 	}
 }
 
@@ -412,14 +418,41 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.input.Value() == "" {
 			return m, tea.Quit
 		}
-	case "j", "down":
+	case "j":
 		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
 			m.expPanelCursor = min(m.expPanelCursor+1, len(m.expiringSoon)-1)
 			return m, nil
 		}
-	case "k", "up":
+	case "k":
 		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
 			m.expPanelCursor = max(m.expPanelCursor-1, 0)
+			return m, nil
+		}
+	case "up":
+		if len(m.upcHistory) > 0 {
+			next := m.historyPos + 1
+			if next < len(m.upcHistory) {
+				if m.historyPos < 0 {
+					m.historySave = m.input.Value()
+				}
+				m.historyPos = next
+				m.input.SetValue(m.upcHistory[next])
+				m.input.CursorEnd()
+			}
+			return m, nil
+		}
+	case "down":
+		if m.historyPos >= 0 {
+			next := m.historyPos - 1
+			if next < 0 {
+				m.input.SetValue(m.historySave)
+				m.input.CursorEnd()
+				m.historyPos = -1
+			} else {
+				m.historyPos = next
+				m.input.SetValue(m.upcHistory[next])
+				m.input.CursorEnd()
+			}
 			return m, nil
 		}
 	case "d":
@@ -478,6 +511,8 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.currentUPC = upc
+		m.upcHistory = prependUPCHistory(m.upcHistory, upc)
+		m.historyPos = -1
 		m.loading = true
 		m.statusMsg = ""
 		m.lookupSeq++
@@ -485,6 +520,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.lookupUPC(upc, m.lookupSeq)
 	}
 
+	m.historyPos = -1
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 	return m, cmd
@@ -1307,6 +1343,21 @@ func splitMultiplicative(expr string) ([]string, []rune) {
 	}
 	terms = append(terms, expr[start:])
 	return terms, ops
+}
+
+func prependUPCHistory(history []string, upc string) []string {
+	const maxHistory = 50
+	result := make([]string, 0, len(history)+1)
+	result = append(result, upc)
+	for _, h := range history {
+		if h != upc {
+			result = append(result, h)
+		}
+	}
+	if len(result) > maxHistory {
+		result = result[:maxHistory]
+	}
+	return result
 }
 
 // resolveExpiry converts the raw expiry input to a YYYY-MM-DD date string.

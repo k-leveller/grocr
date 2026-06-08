@@ -11,8 +11,10 @@ func RenderHelp(width, height int) string {
 		"  Ctrl+E  Export stock to CSV\n" +
 		"  e       Edit product name\n" +
 		"  ?       Toggle this help\n" +
-		"  Tab/↓   Next field\n" +
-		"  S-Tab/↑ Previous field\n" +
+		"  ↑/↓     Cycle UPC scan history (idle input)\n" +
+		"  j/k     Navigate expiring-soon panel\n" +
+		"  Tab/↓   Next field (form)\n" +
+		"  S-Tab/↑ Previous field (form)\n" +
 		"  Enter   Submit form\n" +
 		"  Esc     Cancel current scan\n" +
 		"  Ctrl+C  Quit\n"
