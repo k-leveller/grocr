@@ -28,7 +28,7 @@ func LogAdd(productName string, quantity float64, location, expiry string) {
 		msg += fmt.Sprintf(" location=%q", location)
 	}
 	if expiry != "" && expiry != "2999-12-31" {
-		msg += fmt.Sprintf(" expiry=%s", expiry)
+		msg += fmt.Sprintf(" expiry=%q", expiry)
 	}
 	sl.Info(msg)
 }

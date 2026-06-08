@@ -758,7 +758,14 @@ func (m Model) handleEditNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if newName != "" && newName != m.currentProduct.Name {
 			oldName := m.currentProduct.Name
 			if !m.testMode {
-				m.grocy.UpdateProductName(m.currentProduct.ID, newName)
+				if err := m.grocy.UpdateProductName(m.currentProduct.ID, newName); err != nil {
+					logger.LogError("update product name: " + err.Error())
+					m.statusMsg = "Error updating name: " + err.Error()
+					m.statusErr = true
+					m.state = StateDisplay
+					m.applyPriceDefault()
+					return m, nil
+				}
 			}
 			m.currentProduct.Name = newName
 			logger.LogEditName(newName, oldName)
