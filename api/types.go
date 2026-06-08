@@ -54,9 +54,10 @@ type OFFProduct struct {
 }
 
 type ExpiringItem struct {
-	ProductID      int
-	ProductName    string
-	BestBeforeDate string
+	ProductID        int
+	ProductName      string
+	ProductShortName string
+	BestBeforeDate   string
 }
 
 type StockEntry struct {

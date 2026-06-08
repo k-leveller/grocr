@@ -2138,6 +2138,9 @@ func (m Model) renderExpiringSoonPanel(bodyH int) string {
 		}
 
 		name := item.ProductName
+		if item.ProductShortName != "" {
+			name = item.ProductShortName
+		}
 		runes := []rune(name)
 		if len(runes) > nameColW {
 			name = string(runes[:nameColW-1]) + "…"

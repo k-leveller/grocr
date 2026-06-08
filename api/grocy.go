@@ -364,6 +364,18 @@ func (c *GrocyClient) SetUserfields(entity string, objectID int, fields map[stri
 	return err
 }
 
+func (c *GrocyClient) GetProductUserfields(productID int) (map[string]string, error) {
+	data, err := c.request("GET", fmt.Sprintf("/userfields/products/%d", productID), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]string
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+	return fields, nil
+}
+
 func (c *GrocyClient) AddToShoppingList(productID int) error {
 	data := map[string]interface{}{
 		"product_id":     productID,
@@ -506,6 +518,12 @@ func (c *GrocyClient) GetExpiringSoon(withinDays int) ([]ExpiringItem, error) {
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].BestBeforeDate < result[j].BestBeforeDate
 	})
+
+	for i, item := range result {
+		if fields, err := c.GetProductUserfields(item.ProductID); err == nil {
+			result[i].ProductShortName = fields["short_name"]
+		}
+	}
 
 	return result, nil
 }
