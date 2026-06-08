@@ -7,13 +7,15 @@ import (
 )
 
 type LogEntry struct {
-	ProductName string
-	Quantity    float64
-	Location    string
-	Expiry      string
-	Action      string // "add", "consume", or "spoiled"
-	Success     bool
-	Time        time.Time
+	ProductName  string
+	Quantity     float64
+	Location     string
+	Expiry       string
+	Action       string // "add", "consume", "spoiled", or "transfer"
+	Success      bool
+	Time         time.Time
+	FromLocation string // set for "transfer" action
+	ToLocation   string // set for "transfer" action
 }
 
 func RenderLog(entries []LogEntry, maxLines int) string {

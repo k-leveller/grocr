@@ -324,8 +324,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.statusMsg = "Spoiled: " + msg.entry.ProductName
 				m.statusErr = false
 			case "transfer":
-				from, to, _ := strings.Cut(msg.entry.Location, " → ")
-				logger.LogTransfer(msg.entry.ProductName, msg.entry.Quantity, from, to)
+				logger.LogTransfer(msg.entry.ProductName, msg.entry.Quantity, msg.entry.FromLocation, msg.entry.ToLocation)
 				m.statusMsg = ""
 			default:
 				logger.LogAdd(msg.entry.ProductName, msg.entry.Quantity, msg.entry.Location, msg.entry.Expiry)
@@ -908,6 +907,10 @@ func (m Model) buildTransferForm() ui.Form {
 }
 
 func (m Model) handleTransferFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.loading {
+		return m, nil
+	}
+
 	cmd := m.form.Update(msg)
 
 	if m.form.Cancelled {
@@ -930,15 +933,21 @@ func (m Model) submitTransfer() tea.Cmd {
 		fromID := m.resolveLocation(m.form.Value(1))
 		toID := m.resolveLocation(m.form.Value(2))
 
+		if fromID == toID {
+			return actionResultMsg{err: fmt.Errorf("from and to locations must differ")}
+		}
+
 		fromName := m.locationName(fromID)
 		toName := m.locationName(toID)
 
 		entry := ui.LogEntry{
-			ProductName: product.Name,
-			Quantity:    quantity,
-			Location:    fromName + " → " + toName,
-			Action:      "transfer",
-			Time:        time.Now(),
+			ProductName:  product.Name,
+			Quantity:     quantity,
+			Location:     fromName + " → " + toName,
+			FromLocation: fromName,
+			ToLocation:   toName,
+			Action:       "transfer",
+			Time:         time.Now(),
 		}
 
 		if m.testMode {
