@@ -1,4 +1,4 @@
-# grocy-scanner
+# grocr
 
 A terminal UI for scanning barcodes into [Grocy](https://grocy.info/) inventory. Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
@@ -15,12 +15,20 @@ Reads UPC barcodes (from a USB scanner or typed manually), looks up product info
 - **Smart defaults** — shelf life estimated from product categories, location remembered per product
 - **Scan log** — recent actions shown at the top of the screen
 
-## Usage
+## Installation
+
+Requires Go 1.21 or later.
 
 ```
-grocy-scanner              # normal mode
-grocy-scanner --consume    # start in consume mode
-grocy-scanner --test       # UI preview, no Grocy API calls
+go install github.com/k-leveller/grocr@latest
+```
+
+Or build from source:
+
+```
+git clone https://github.com/k-leveller/grocr
+cd grocr
+go build -o grocr .
 ```
 
 ## Configuration
@@ -32,13 +40,37 @@ GROCY_URL=https://your-grocy-instance.example.com
 GROCY_API_KEY=your-api-key
 ```
 
-Or place a JSON file at `~/.config/grocy-scanner/config.json`:
+Or place a JSON file at `~/.config/grocr/config.json`:
 
 ```json
 {
   "base_url": "https://your-grocy-instance.example.com",
   "api_key": "your-api-key"
 }
+```
+
+Environment variables take precedence over the config file.
+
+### Optional: display name userfield
+
+If you have a custom Grocy userfield you want to use as a short display label for products (shown in the Expiring Soon panel and as an optional field when creating products), set `display_name_userfield` to the field's key:
+
+```json
+{
+  "base_url": "https://your-grocy-instance.example.com",
+  "api_key": "your-api-key",
+  "display_name_userfield": "short_name"
+}
+```
+
+When set, a **Display name** field appears during product creation, and the configured userfield value is shown in the Expiring Soon panel when available. Leave this unset (or omit it) to disable the feature.
+
+## Usage
+
+```
+grocr              # normal mode
+grocr --consume    # start in consume mode
+grocr --test       # UI preview, no Grocy API calls
 ```
 
 ## Keybindings
@@ -53,9 +85,3 @@ Or place a JSON file at `~/.config/grocy-scanner/config.json`:
 | `Tab` / `Shift-Tab` | Navigate form fields |
 | `Enter` | Advance field / submit |
 | `Esc` | Cancel current scan |
-
-## Building
-
-```
-go build -o grocy-scanner .
-```

@@ -1,4 +1,4 @@
-module github.com/kevin/grocy-scanner
+module github.com/k-leveller/grocr
 
 go 1.24.2
 

@@ -6,7 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/kevin/grocy-scanner/api"
+	"github.com/k-leveller/grocr/api"
 )
 
 type Search struct {

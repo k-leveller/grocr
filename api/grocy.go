@@ -12,21 +12,27 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kevin/grocy-scanner/config"
+	"github.com/k-leveller/grocr/config"
 )
 
 type GrocyClient struct {
-	baseURL    string
-	apiKey     string
-	httpClient *http.Client
+	baseURL              string
+	apiKey               string
+	httpClient           *http.Client
+	displayNameUserfield string
 }
 
 func NewGrocyClient(cfg *config.Config) *GrocyClient {
 	return &GrocyClient{
-		baseURL:    strings.TrimRight(cfg.BaseURL, "/"),
-		apiKey:     cfg.APIKey,
-		httpClient: &http.Client{Timeout: 15 * time.Second},
+		baseURL:              strings.TrimRight(cfg.BaseURL, "/"),
+		apiKey:               cfg.APIKey,
+		httpClient:           &http.Client{Timeout: 15 * time.Second},
+		displayNameUserfield: cfg.DisplayNameUserfield,
 	}
+}
+
+func (c *GrocyClient) DisplayNameUserfield() string {
+	return c.displayNameUserfield
 }
 
 func (c *GrocyClient) request(method, path string, body interface{}, params map[string]string) ([]byte, error) {
@@ -249,8 +255,8 @@ func (c *GrocyClient) CreateProduct(name string, shelfLifeDays *int, defaults *D
 	}
 
 	if createdID > 0 {
-		if shortName != "" {
-			c.SetUserfields("products", createdID, map[string]string{"short_name": shortName})
+		if shortName != "" && c.displayNameUserfield != "" {
+			c.SetUserfields("products", createdID, map[string]string{c.displayNameUserfield: shortName})
 		}
 		return c.GetProduct(createdID)
 	}
@@ -526,9 +532,11 @@ func (c *GrocyClient) GetExpiringSoon(withinDays int) ([]ExpiringItem, error) {
 		return result[i].BestBeforeDate < result[j].BestBeforeDate
 	})
 
-	for i, item := range result {
-		if fields, err := c.GetProductUserfields(item.ProductID); err == nil {
-			result[i].ProductShortName = fields["short_name"]
+	if c.displayNameUserfield != "" {
+		for i, item := range result {
+			if fields, err := c.GetProductUserfields(item.ProductID); err == nil {
+				result[i].ProductShortName = fields[c.displayNameUserfield]
+			}
 		}
 	}
 

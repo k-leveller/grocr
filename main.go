@@ -6,9 +6,9 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/kevin/grocy-scanner/api"
-	"github.com/kevin/grocy-scanner/config"
-	"github.com/kevin/grocy-scanner/logger"
+	"github.com/k-leveller/grocr/api"
+	"github.com/k-leveller/grocr/config"
+	"github.com/k-leveller/grocr/logger"
 )
 
 func main() {

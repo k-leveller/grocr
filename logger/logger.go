@@ -9,7 +9,7 @@ var sl *syslog.Writer
 
 func Init() error {
 	var err error
-	sl, err = syslog.New(syslog.LOG_INFO|syslog.LOG_USER, "grocy-scanner")
+	sl, err = syslog.New(syslog.LOG_INFO|syslog.LOG_USER, "grocr")
 	return err
 }
 

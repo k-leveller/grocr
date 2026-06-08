@@ -13,10 +13,10 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/kevin/grocy-scanner/api"
-	"github.com/kevin/grocy-scanner/logger"
-	"github.com/kevin/grocy-scanner/scanner"
-	"github.com/kevin/grocy-scanner/ui"
+	"github.com/k-leveller/grocr/api"
+	"github.com/k-leveller/grocr/logger"
+	"github.com/k-leveller/grocr/scanner"
+	"github.com/k-leveller/grocr/ui"
 )
 
 const (
@@ -1009,14 +1009,18 @@ func (m Model) buildNewProductForm() ui.Form {
 
 	fields := []ui.FormField{
 		{Label: "Name", Default: defaultName, Required: true},
-		{Label: "Short name", Default: ""},
-		{Label: "Qty unit", Default: qtyUnitDefault, Hint: qtyUnitHint, Required: true},
-		{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (YYYY-MM-DD, days, or blank=never)"},
-		{Label: "Location", Default: locationDefault, Hint: locationHint},
-		{Label: "Store", Default: storeDefault, Hint: storeHint},
-		{Label: "Quantity", Default: "1"},
-		{Label: "Price", Default: "", Hint: "total price paid"},
 	}
+	if m.grocy.DisplayNameUserfield() != "" {
+		fields = append(fields, ui.FormField{Label: "Display name", Default: ""})
+	}
+	fields = append(fields,
+		ui.FormField{Label: "Qty unit", Default: qtyUnitDefault, Hint: qtyUnitHint, Required: true},
+		ui.FormField{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (YYYY-MM-DD, days, or blank=never)"},
+		ui.FormField{Label: "Location", Default: locationDefault, Hint: locationHint},
+		ui.FormField{Label: "Store", Default: storeDefault, Hint: storeHint},
+		ui.FormField{Label: "Quantity", Default: "1"},
+		ui.FormField{Label: "Price", Default: "", Hint: "total price paid"},
+	)
 
 	return ui.NewForm(fields)
 }
@@ -1613,15 +1617,20 @@ func (m Model) submitForm() tea.Cmd {
 		var storeID int
 		var storeErr error
 		var quID int
+		var shortName string
 		if m.isNewProduct {
 			productName = m.form.Value(0)
-			// shortName = m.form.Value(1)
-			quID = m.resolveQuantityUnit(m.form.Value(2))
-			bestBefore = m.form.Value(3)
-			locationID = m.resolveLocation(m.form.Value(4))
-			storeID, storeErr = m.resolveOrCreateStore(m.form.Value(5))
-			quantity = m.parseQuantity(m.form.Value(6))
-			price = m.parsePrice(m.form.Value(7))
+			idx := 1
+			if m.grocy.DisplayNameUserfield() != "" {
+				shortName = m.form.Value(idx)
+				idx++
+			}
+			quID = m.resolveQuantityUnit(m.form.Value(idx))
+			bestBefore = m.form.Value(idx + 1)
+			locationID = m.resolveLocation(m.form.Value(idx + 2))
+			storeID, storeErr = m.resolveOrCreateStore(m.form.Value(idx + 3))
+			quantity = m.parseQuantity(m.form.Value(idx + 4))
+			price = m.parsePrice(m.form.Value(idx + 5))
 		} else {
 			productName = m.currentProduct.Name
 			bestBefore = m.form.Value(0)
@@ -1653,7 +1662,6 @@ func (m Model) submitForm() tea.Cmd {
 		// Create product if new
 		var product *api.Product
 		if m.isNewProduct {
-			shortName := m.form.Value(1)
 			shelfDays := m.daysFromExpiry(bestBefore)
 			freezeDays := 365
 			p, err := m.grocy.CreateProduct(productName, shelfDays, m.defaults, shortName, locationID, storeID, quID, &freezeDays, shelfDays)

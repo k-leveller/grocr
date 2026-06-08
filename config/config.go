@@ -8,8 +8,9 @@ import (
 )
 
 type Config struct {
-	BaseURL string `json:"base_url"`
-	APIKey  string `json:"api_key"`
+	BaseURL              string `json:"base_url"`
+	APIKey               string `json:"api_key"`
+	DisplayNameUserfield string `json:"display_name_userfield"`
 }
 
 func Load() (*Config, error) {
@@ -21,10 +22,8 @@ func Load() (*Config, error) {
 		return &Config{BaseURL: baseURL, APIKey: apiKey}, nil
 	}
 
-	// Try config file locations
 	paths := []string{
-		filepath.Join(os.Getenv("HOME"), ".config", "grocy-scanner", "config.json"),
-		"/home/eris/.openclaw/secrets/grocy.json",
+		filepath.Join(os.Getenv("HOME"), ".config", "grocr", "config.json"),
 	}
 
 	for _, p := range paths {
@@ -41,5 +40,5 @@ func Load() (*Config, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("no Grocy config found; set GROCY_URL and GROCY_API_KEY env vars or create ~/.config/grocy-scanner/config.json")
+	return nil, fmt.Errorf("no Grocy config found; set GROCY_URL and GROCY_API_KEY env vars or create ~/.config/grocr/config.json")
 }
