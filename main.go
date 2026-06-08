@@ -8,12 +8,18 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kevin/grocy-scanner/api"
 	"github.com/kevin/grocy-scanner/config"
+	"github.com/kevin/grocy-scanner/logger"
 )
 
 func main() {
 	testMode := flag.Bool("test", false, "Test mode: skip all Grocy API calls")
 	consumeMode := flag.Bool("consume", false, "Start in consume mode")
 	flag.Parse()
+
+	if err := logger.Init(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not initialize syslog: %v\n", err)
+	}
+	defer logger.Close()
 
 	var grocy *api.GrocyClient
 	if !*testMode {

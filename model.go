@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kevin/grocy-scanner/api"
+	"github.com/kevin/grocy-scanner/logger"
 	"github.com/kevin/grocy-scanner/scanner"
 	"github.com/kevin/grocy-scanner/ui"
 )
@@ -189,6 +190,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case defaultsLoadedMsg:
 		if msg.err != nil {
+			logger.LogError("failed to load Grocy defaults: " + msg.err.Error())
 			m.statusMsg = "Failed to load Grocy defaults: " + msg.err.Error()
 			m.statusErr = true
 		} else {
@@ -206,6 +208,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.loading = false
 		if msg.err != nil {
+			logger.LogError("lookup error: " + msg.err.Error())
 			m.statusMsg = "Lookup error: " + msg.err.Error()
 			m.statusErr = true
 			m.state = StateIdle
@@ -225,10 +228,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case actionResultMsg:
 		m.loading = false
 		if msg.err != nil {
+			logger.LogError("action error: " + msg.err.Error())
 			m.statusMsg = "Error: " + msg.err.Error()
 			m.statusErr = true
 		} else {
 			m.logEntries = append([]ui.LogEntry{msg.entry}, m.logEntries...)
+			if msg.entry.Action == "consume" {
+				logger.LogConsume(msg.entry.ProductName, msg.entry.Quantity)
+			} else {
+				logger.LogAdd(msg.entry.ProductName, msg.entry.Quantity, msg.entry.Location, msg.entry.Expiry)
+			}
 			m.statusMsg = ""
 		}
 		m.state = StateIdle
@@ -747,10 +756,12 @@ func (m Model) handleEditNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		newName := strings.TrimSpace(m.editInput.Value())
 		if newName != "" && newName != m.currentProduct.Name {
+			oldName := m.currentProduct.Name
 			if !m.testMode {
 				m.grocy.UpdateProductName(m.currentProduct.ID, newName)
 			}
 			m.currentProduct.Name = newName
+			logger.LogEditName(newName, oldName)
 			m.statusMsg = "Name updated"
 			m.statusErr = false
 		}
