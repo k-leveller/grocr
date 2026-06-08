@@ -454,6 +454,18 @@ func (c *GrocyClient) GetRecipes() ([]Recipe, error) {
 	return recipes, nil
 }
 
+func (c *GrocyClient) GetRecipeFulfillment(id int) (*RecipeFulfillment, error) {
+	data, err := c.request("GET", fmt.Sprintf("/recipes/%d/fulfillment", id), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var f RecipeFulfillment
+	if err := json.Unmarshal(data, &f); err != nil {
+		return nil, err
+	}
+	return &f, nil
+}
+
 func (c *GrocyClient) GetExpiringSoon(withinDays int) ([]ExpiringItem, error) {
 	data, err := c.request("GET", "/stock", nil, nil)
 	if err != nil {

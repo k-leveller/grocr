@@ -90,3 +90,10 @@ type Recipe struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
 }
+
+type RecipeFulfillment struct {
+	RecipeID                      int  `json:"recipe_id"`
+	NeedFulfilled                 bool `json:"need_fulfilled"`
+	NeedFulfilledWithShoppingList bool `json:"need_fulfilled_with_shopping_list"`
+	MissingProductsCount          int  `json:"missing_products_count"`
+}

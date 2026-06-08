@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -40,6 +41,7 @@ const (
 	StateTransfer
 	StateMealPlan
 	StateUnknownBarcode
+	StateRecipeList
 )
 
 type Model struct {
@@ -110,6 +112,12 @@ type Model struct {
 
 	// Barcode linking (search opened to assign currentUPC to an existing product)
 	linkBarcode bool
+
+	// Recipe list
+	recipeList        []api.Recipe
+	recipeFulfillment map[int]api.RecipeFulfillment
+	recipeListLoaded  bool
+	recipeListCursor  int
 }
 
 // Messages
@@ -170,6 +178,12 @@ type mealPlanMsg struct {
 type linkBarcodeResultMsg struct {
 	product *api.Product
 	err     error
+}
+
+type recipeListMsg struct {
+	recipes     []api.Recipe
+	fulfillment map[int]api.RecipeFulfillment
+	err         error
 }
 
 func NewModel(grocy *api.GrocyClient, off *api.OFFClient, testMode bool) Model {
@@ -405,6 +419,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case recipeListMsg:
+		m.recipeListLoaded = true
+		if msg.err != nil {
+			if m.state == StateRecipeList {
+				m.statusMsg = "Failed to load recipes: " + msg.err.Error()
+				m.statusErr = true
+			}
+		} else {
+			sort.Slice(msg.recipes, func(i, j int) bool {
+				si := recipeScore(msg.fulfillment[msg.recipes[i].ID])
+				sj := recipeScore(msg.fulfillment[msg.recipes[j].ID])
+				if si != sj {
+					return si < sj
+				}
+				return msg.recipes[i].Name < msg.recipes[j].Name
+			})
+			m.recipeList = msg.recipes
+			m.recipeFulfillment = msg.fulfillment
+		}
+		return m, nil
+
 	case linkBarcodeResultMsg:
 		if msg.err != nil {
 			logger.LogError("link barcode: " + msg.err.Error())
@@ -494,6 +529,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleMealPlanKey(msg)
 	case StateUnknownBarcode:
 		return m.handleUnknownBarcodeKey(msg)
+	case StateRecipeList:
+		return m.handleRecipeListKey(msg)
 	}
 
 	return m, nil
@@ -601,6 +638,16 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input.SetValue("")
 		m.historyPos = -1
 		return m.startManualProductEntry()
+	case "r":
+		if m.input.Value() == "" {
+			m.state = StateRecipeList
+			m.recipeListLoaded = false
+			m.recipeList = nil
+			m.recipeFulfillment = nil
+			m.recipeListCursor = 0
+			m.input.Blur()
+			return m, m.loadRecipeList()
+		}
 	case "P":
 		if m.input.Value() == "" {
 			m.state = StateMealPlan
@@ -735,6 +782,61 @@ func (m Model) loadMealPlan() tea.Cmd {
 		}
 		return mealPlanMsg{items: items, recipes: recipeMap}
 	}
+}
+
+func (m Model) loadRecipeList() tea.Cmd {
+	return func() tea.Msg {
+		if m.testMode {
+			return recipeListMsg{recipes: []api.Recipe{}, fulfillment: map[int]api.RecipeFulfillment{}}
+		}
+		recipes, err := m.grocy.GetRecipes()
+		if err != nil {
+			return recipeListMsg{err: err}
+		}
+		fulfillment := make(map[int]api.RecipeFulfillment, len(recipes))
+		for _, r := range recipes {
+			f, err := m.grocy.GetRecipeFulfillment(r.ID)
+			if err == nil && f != nil {
+				fulfillment[r.ID] = *f
+			}
+		}
+		return recipeListMsg{recipes: recipes, fulfillment: fulfillment}
+	}
+}
+
+func recipeScore(f api.RecipeFulfillment) int {
+	if f.NeedFulfilled {
+		return 0
+	}
+	if f.NeedFulfilledWithShoppingList {
+		return 1
+	}
+	return 2
+}
+
+func (m Model) handleRecipeListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q":
+		m.state = StateIdle
+		m.statusMsg = ""
+		m.statusErr = false
+		return m, m.input.Focus()
+	case "j", "down":
+		if m.recipeListCursor < len(m.recipeList)-1 {
+			m.recipeListCursor++
+		}
+	case "k", "up":
+		if m.recipeListCursor > 0 {
+			m.recipeListCursor--
+		}
+	case "r":
+		m.recipeListLoaded = false
+		m.recipeList = nil
+		m.recipeFulfillment = nil
+		m.recipeListCursor = 0
+		return m, m.loadRecipeList()
+	}
+	return m, nil
 }
 
 func (m Model) loadPriceHistory() tea.Cmd {
@@ -1187,6 +1289,7 @@ func (m Model) handleUnknownBarcodeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.state = StateIdle
 		m.currentProduct = nil
+		m.isNewProduct = false
 		m.offInfo = nil
 		m.stockInfo = nil
 		m.currentUPC = ""
@@ -1846,6 +1949,8 @@ func (m Model) renderInputLine() string {
 		return " " + ui.StyleHint.Render("j/k = navigate  •  Esc/p = back")
 	case StateMealPlan:
 		return " " + ui.StyleHint.Render("j/k = scroll  •  r = refresh  •  Esc/q = back")
+	case StateRecipeList:
+		return " " + ui.StyleHint.Render("j/k = navigate  •  r = refresh  •  Esc/q = back")
 	case StateEditNotes:
 		return " " + ui.StyleHint.Render("Enter to save  •  Esc to cancel")
 	case StateShoppingListPrompt:
@@ -1882,6 +1987,14 @@ func (m Model) renderMainContent(width, bodyH int) string {
 	case StateLookup:
 		sections = append(sections, " "+ui.StyleInfo.Render(fmt.Sprintf("Looking up UPC %s...", m.currentUPC)))
 	case StateDisplay, StateForm:
+		if m.statusMsg != "" {
+			if m.statusErr {
+				sections = append(sections, " "+ui.StyleError.Render(m.statusMsg))
+			} else {
+				sections = append(sections, " "+ui.StyleSuccess.Render(m.statusMsg))
+			}
+			sections = append(sections, "")
+		}
 		sections = append(sections, m.renderProductInfo())
 		sections = append(sections, "")
 		sections = append(sections, m.form.View())
@@ -1913,6 +2026,8 @@ func (m Model) renderMainContent(width, bodyH int) string {
 		sections = append(sections, m.renderPriceHistoryView(bodyH))
 	case StateMealPlan:
 		sections = append(sections, m.renderMealPlanView(bodyH))
+	case StateRecipeList:
+		sections = append(sections, m.renderRecipeListView(bodyH))
 	case StateShoppingListPrompt:
 		if m.currentProduct != nil {
 			sections = append(sections, fmt.Sprintf(" %s %s",
@@ -2301,6 +2416,78 @@ func (m Model) renderMealPlanView(bodyH int) string {
 		offset = maxOffset
 	}
 
+	end := offset + maxVisible
+	if end > len(content) {
+		end = len(content)
+	}
+	lines = append(lines, content[offset:end]...)
+
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) renderRecipeListView(bodyH int) string {
+	var lines []string
+	lines = append(lines, " "+ui.StyleBold.Render("Recipes"))
+	lines = append(lines, "")
+
+	if !m.recipeListLoaded {
+		lines = append(lines, " "+ui.StyleHint.Render("Loading..."))
+		return strings.Join(lines, "\n")
+	}
+	if len(m.recipeList) == 0 {
+		lines = append(lines, " "+ui.StyleHint.Render("No recipes found."))
+		return strings.Join(lines, "\n")
+	}
+
+	var content []string
+	for i, r := range m.recipeList {
+		f, hasFulfillment := m.recipeFulfillment[r.ID]
+
+		var statusIcon string
+		var missingStr string
+		if hasFulfillment {
+			switch {
+			case f.NeedFulfilled:
+				statusIcon = ui.StyleSuccess.Render("✓")
+			case f.NeedFulfilledWithShoppingList:
+				statusIcon = ui.StyleWarning.Render("~")
+				if f.MissingProductsCount > 0 {
+					missingStr = "  " + ui.StyleHint.Render(fmt.Sprintf("(%d missing)", f.MissingProductsCount))
+				}
+			default:
+				statusIcon = ui.StyleError.Render("✗")
+				if f.MissingProductsCount > 0 {
+					missingStr = "  " + ui.StyleHint.Render(fmt.Sprintf("(%d missing)", f.MissingProductsCount))
+				}
+			}
+		} else {
+			statusIcon = ui.StyleHint.Render("?")
+		}
+
+		prefix := "  "
+		if i == m.recipeListCursor {
+			prefix = ui.StyleWarning.Render("> ")
+		}
+		content = append(content, fmt.Sprintf("%s%s %s%s", prefix, statusIcon, r.Name, missingStr))
+	}
+
+	// Compute scroll window to keep cursor visible
+	headerLines := len(lines)
+	maxVisible := bodyH - headerLines
+	if maxVisible < 1 {
+		maxVisible = 1
+	}
+	offset := 0
+	if m.recipeListCursor >= maxVisible {
+		offset = m.recipeListCursor - maxVisible + 1
+	}
+	maxOffset := len(content) - maxVisible
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if offset > maxOffset {
+		offset = maxOffset
+	}
 	end := offset + maxVisible
 	if end > len(content) {
 		end = len(content)
