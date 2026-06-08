@@ -21,7 +21,10 @@ func RenderHelp(width, height int) string {
 		"  S-Tab/↑ Previous field (form)\n" +
 		"  Enter   Submit form\n" +
 		"  Esc     Cancel current scan\n" +
-		"  Ctrl+C  Quit\n"
+		"  Ctrl+C  Quit\n\n" +
+		StyleBold.Render("Unknown Barcode") + "\n\n" +
+		"  C/Enter  Create a new product for this barcode\n" +
+		"  L        Link barcode to an existing product (rebrand/repackage)\n"
 
 	overlay := StyleHelpOverlay.Render(content)
 

@@ -68,6 +68,13 @@ func LogShoppingList(productName string) {
 	sl.Info(fmt.Sprintf("SHOPPING_LIST product=%q", productName))
 }
 
+func LogLinkBarcode(barcode, productName string) {
+	if sl == nil {
+		return
+	}
+	sl.Info(fmt.Sprintf("LINK_BARCODE barcode=%q product=%q", barcode, productName))
+}
+
 func LogError(msg string) {
 	if sl == nil {
 		return

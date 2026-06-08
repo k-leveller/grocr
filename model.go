@@ -39,6 +39,7 @@ const (
 	StateEditNotes
 	StateTransfer
 	StateMealPlan
+	StateUnknownBarcode
 )
 
 type Model struct {
@@ -106,6 +107,9 @@ type Model struct {
 	mealPlanRecipes map[int]string
 	mealPlanLoaded  bool
 	mealPlanOffset  int
+
+	// Barcode linking (search opened to assign currentUPC to an existing product)
+	linkBarcode bool
 }
 
 // Messages
@@ -160,6 +164,11 @@ type exportResultMsg struct {
 type mealPlanMsg struct {
 	items   []api.MealPlanItem
 	recipes map[int]string
+	err     error
+}
+
+type linkBarcodeResultMsg struct {
+	product *api.Product
 	err     error
 }
 
@@ -396,6 +405,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case linkBarcodeResultMsg:
+		if msg.err != nil {
+			logger.LogError("link barcode: " + msg.err.Error())
+			m.statusMsg = "Link failed: " + msg.err.Error()
+			m.statusErr = true
+			m.state = StateUnknownBarcode
+			return m, nil
+		}
+		logger.LogLinkBarcode(m.currentUPC, msg.product.Name)
+		m.currentProduct = msg.product
+		m.isNewProduct = false
+		m.statusMsg = "Barcode linked to " + msg.product.Name
+		m.statusErr = false
+		m.state = StateDisplay
+		m.form = m.buildExistingProductForm()
+		m.stockInfo = nil
+		return m, m.loadStock()
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -465,6 +492,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleTransferFormKey(msg)
 	case StateMealPlan:
 		return m.handleMealPlanKey(msg)
+	case StateUnknownBarcode:
+		return m.handleUnknownBarcodeKey(msg)
 	}
 
 	return m, nil
@@ -642,6 +671,10 @@ func (m Model) handleLookupResult(msg lookupResultMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.isNewProduct {
+		if m.currentUPC != "" {
+			m.state = StateUnknownBarcode
+			return m, nil
+		}
 		m.state = StateForm
 		m.form = m.buildNewProductForm()
 		return m, nil
@@ -1084,18 +1117,32 @@ func (m Model) handleConsumeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "ctrl+n" {
-		return m.startManualProductEntry()
+		if !m.linkBarcode {
+			return m.startManualProductEntry()
+		}
+		return m, nil
 	}
 
 	cmd := m.search.Update(msg)
 
 	if m.search.Cancelled {
+		if m.linkBarcode {
+			m.linkBarcode = false
+			m.state = StateUnknownBarcode
+			return m, nil
+		}
 		m.state = StateIdle
 		m.input.SetValue("")
 		return m, m.input.Focus()
 	}
 
 	if m.search.Selected != nil {
+		if m.linkBarcode {
+			m.linkBarcode = false
+			product := m.search.Selected
+			return m, m.doLinkBarcode(product)
+		}
+
 		// Treat selected product as if it was found by barcode
 		m.currentProduct = m.search.Selected
 		m.currentUPC = ""
@@ -1120,6 +1167,46 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+func (m Model) handleUnknownBarcodeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "c", "enter":
+		m.state = StateForm
+		m.form = m.buildNewProductForm()
+		return m, nil
+	case "l":
+		m.linkBarcode = true
+		m.state = StateSearch
+		var locs []api.Location
+		if m.defaults != nil {
+			locs = m.defaults.Locations
+		}
+		m.search = ui.NewSearch(m.allProducts, locs)
+		return m, nil
+	case "esc":
+		m.state = StateIdle
+		m.currentProduct = nil
+		m.offInfo = nil
+		m.stockInfo = nil
+		m.currentUPC = ""
+		m.input.SetValue("")
+		return m, m.input.Focus()
+	}
+	return m, nil
+}
+
+func (m Model) doLinkBarcode(product *api.Product) tea.Cmd {
+	upc := m.currentUPC
+	testMode := m.testMode
+	return func() tea.Msg {
+		if !testMode && upc != "" {
+			if err := m.grocy.AddBarcode(product.ID, upc); err != nil {
+				return linkBarcodeResultMsg{err: err}
+			}
+		}
+		return linkBarcodeResultMsg{product: product}
+	}
 }
 
 func (m *Model) applyPriceDefault() {
@@ -1763,6 +1850,8 @@ func (m Model) renderInputLine() string {
 		return " " + ui.StyleHint.Render("Enter to save  •  Esc to cancel")
 	case StateShoppingListPrompt:
 		return " " + ui.StyleHint.Render("y = yes, any other key = no")
+	case StateUnknownBarcode:
+		return " " + ui.StyleHint.Render("C/Enter = create new  •  L = link existing  •  Esc = cancel")
 	default:
 		if m.loading {
 			return " " + ui.StyleHint.Render("loading...")
@@ -1832,6 +1921,13 @@ func (m Model) renderMainContent(width, bodyH int) string {
 			sections = append(sections, "")
 			sections = append(sections, " Add to shopping list? [y/N]")
 		}
+	case StateUnknownBarcode:
+		sections = append(sections, m.renderProductInfo())
+		sections = append(sections, "")
+		sections = append(sections, " "+ui.StyleWarning.Render("Unknown barcode — what would you like to do?"))
+		sections = append(sections, "")
+		sections = append(sections, "  [C] / Enter  Create a new product")
+		sections = append(sections, "  [L]          Link to an existing product")
 	}
 
 	return strings.Join(sections, "\n")
