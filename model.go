@@ -2167,9 +2167,11 @@ func (m Model) renderExpiringSoonPanel(bodyH int) string {
 		case days < 0:
 			daysText = "exp"
 			daysStyle = ui.StyleError
-		case days <= 3:
+		case days <= 1:
+			daysStyle = ui.StyleError
+		case days <= 2:
 			daysStyle = ui.StyleOrange
-		case days <= 7:
+		case days <= 4:
 			daysStyle = ui.StyleWarning
 		default:
 			daysStyle = ui.StyleHint
