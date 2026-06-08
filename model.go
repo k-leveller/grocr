@@ -412,7 +412,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case mealPlanMsg:
 		m.mealPlanLoaded = true
 		if msg.err != nil {
-			if m.state == StateMealPlan {
+			if m.state == StateMealPlan || m.state == StateTodayMealPlan {
 				m.statusMsg = "Meal plan unavailable: " + msg.err.Error()
 				m.statusErr = true
 			}
@@ -2550,15 +2550,21 @@ func (m Model) renderTodayMealPlanView() string {
 			}
 
 			var firstDesc string
+			extraCount := 0
 			for _, item := range g.items {
-				firstDesc = m.mealPlanItemDesc(item)
-				if firstDesc != "" {
-					break
+				desc := m.mealPlanItemDesc(item)
+				if desc == "" {
+					continue
+				}
+				if firstDesc == "" {
+					firstDesc = desc
+				} else {
+					extraCount++
 				}
 			}
 			extra := ""
-			if len(g.items) > 1 {
-				extra = ui.StyleHint.Render(fmt.Sprintf(" +%d more", len(g.items)-1))
+			if extraCount > 0 {
+				extra = ui.StyleHint.Render(fmt.Sprintf(" +%d more", extraCount))
 			}
 			if firstDesc != "" {
 				lines = append(lines, fmt.Sprintf("   %s  %s%s",
