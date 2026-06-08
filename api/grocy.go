@@ -428,11 +428,10 @@ func (c *GrocyClient) GetPurchaseHistory(productID int, limit int) ([]StockTrans
 }
 
 func (c *GrocyClient) GetMealPlan(from, to string) ([]MealPlanItem, error) {
-	v := url.Values{}
-	v.Add("query[]", "day>="+from)
-	v.Add("query[]", "day<="+to)
-	v.Add("order[]", "day ASC")
-	data, err := c.request("GET", "/objects/meal_plan?"+v.Encode(), nil, nil)
+	// Use raw query string — url.Values.Encode() would percent-encode >= and <=,
+	// which Grocy's PHP filter parser does not recognize as comparison operators.
+	rawQuery := fmt.Sprintf("query[]=day>=%s&query[]=day<=%s&order[]=day+ASC", from, to)
+	data, err := c.request("GET", "/objects/meal_plan?"+rawQuery, nil, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -386,8 +386,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case mealPlanMsg:
 		m.mealPlanLoaded = true
 		if msg.err != nil {
-			m.statusMsg = "Meal plan unavailable: " + msg.err.Error()
-			m.statusErr = true
+			if m.state == StateMealPlan {
+				m.statusMsg = "Meal plan unavailable: " + msg.err.Error()
+				m.statusErr = true
+			}
 		} else {
 			m.mealPlan = msg.items
 			m.mealPlanRecipes = msg.recipes
@@ -580,6 +582,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.input.Blur()
 			return m, m.loadMealPlan()
 		}
+		return m, nil
 	case "enter":
 		val := strings.TrimSpace(m.input.Value())
 		if val == "" {
@@ -1265,7 +1268,10 @@ func (m Model) handleMealPlanKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statusErr = false
 		return m, m.input.Focus()
 	case "j", "down":
-		m.mealPlanOffset++
+		// Cap at ~3 lines per item (day header + entry + blank gap)
+		if m.mealPlanOffset < len(m.mealPlan)*3+len(m.mealPlanRecipes) {
+			m.mealPlanOffset++
+		}
 	case "k", "up":
 		if m.mealPlanOffset > 0 {
 			m.mealPlanOffset--
@@ -2194,15 +2200,16 @@ func (m Model) renderMealPlanView(bodyH int) string {
 	if maxOffset < 0 {
 		maxOffset = 0
 	}
-	if m.mealPlanOffset > maxOffset {
-		m.mealPlanOffset = maxOffset
+	offset := m.mealPlanOffset
+	if offset > maxOffset {
+		offset = maxOffset
 	}
 
-	end := m.mealPlanOffset + maxVisible
+	end := offset + maxVisible
 	if end > len(content) {
 		end = len(content)
 	}
-	lines = append(lines, content[m.mealPlanOffset:end]...)
+	lines = append(lines, content[offset:end]...)
 
 	return strings.Join(lines, "\n")
 }
