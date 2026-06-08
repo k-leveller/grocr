@@ -36,6 +36,7 @@ const (
 	StateLookupView
 	StateShoppingListPrompt
 	StatePriceHistory
+	StateEditNotes
 )
 
 type Model struct {
@@ -375,7 +376,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StateSearch:
 		cmd := m.search.Update(msg)
 		return m, cmd
-	case StateEditName:
+	case StateEditName, StateEditNotes:
 		var cmd tea.Cmd
 		m.editInput, cmd = m.editInput.Update(msg)
 		return m, cmd
@@ -422,6 +423,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handlePriceHistoryKey(msg)
 	case StateShoppingListPrompt:
 		return m.handleShoppingListKey(msg)
+	case StateEditNotes:
+		return m.handleEditNotesKey(msg)
 	}
 
 	return m, nil
@@ -1024,8 +1027,51 @@ func (m Model) handleLookupViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.priceHistoryCursor = 0
 			return m, m.loadPriceHistory()
 		}
+	case "n":
+		if m.currentProduct != nil {
+			m.state = StateEditNotes
+			ti := textinput.New()
+			ti.SetValue(m.currentProduct.Description)
+			ti.Focus()
+			ti.CharLimit = 500
+			ti.Width = 60
+			m.editInput = ti
+		}
 	}
 	return m, nil
+}
+
+func (m Model) handleEditNotesKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+
+	switch key {
+	case "enter":
+		newNotes := strings.TrimSpace(m.editInput.Value())
+		if newNotes != m.currentProduct.Description {
+			if !m.testMode {
+				if err := m.grocy.UpdateProductDescription(m.currentProduct.ID, newNotes); err != nil {
+					logger.LogError("update product notes: " + err.Error())
+					m.statusMsg = "Error updating notes: " + err.Error()
+					m.statusErr = true
+					m.state = StateLookupView
+					return m, nil
+				}
+			}
+			m.currentProduct.Description = newNotes
+			logger.LogEditNotes(m.currentProduct.Name)
+			m.statusMsg = "Notes updated"
+			m.statusErr = false
+		}
+		m.state = StateLookupView
+		return m, nil
+	case "esc":
+		m.state = StateLookupView
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.editInput, cmd = m.editInput.Update(msg)
+	return m, cmd
 }
 
 func (m Model) handlePriceHistoryKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1511,9 +1557,11 @@ func (m Model) renderInputLine() string {
 	case StateIdle:
 		return " > " + m.input.View()
 	case StateLookupView:
-		return " " + ui.StyleHint.Render("p = price history  •  Esc/Enter = dismiss")
+		return " " + ui.StyleHint.Render("n = notes  •  p = price history  •  Esc/Enter = dismiss")
 	case StatePriceHistory:
 		return " " + ui.StyleHint.Render("j/k = navigate  •  Esc/p = back")
+	case StateEditNotes:
+		return " " + ui.StyleHint.Render("Enter to save  •  Esc to cancel")
 	case StateShoppingListPrompt:
 		return " " + ui.StyleHint.Render("y = yes, any other key = no")
 	default:
@@ -1553,6 +1601,11 @@ func (m Model) renderMainContent(width, bodyH int) string {
 		sections = append(sections, m.renderProductInfo())
 		sections = append(sections, "")
 		sections = append(sections, " "+ui.StyleBold.Render("Edit name: ")+m.editInput.View())
+		sections = append(sections, " "+ui.StyleHint.Render("Enter to save, Esc to cancel"))
+	case StateEditNotes:
+		sections = append(sections, m.renderLookupView())
+		sections = append(sections, "")
+		sections = append(sections, " "+ui.StyleBold.Render("Notes: ")+m.editInput.View())
 		sections = append(sections, " "+ui.StyleHint.Render("Enter to save, Esc to cancel"))
 	case StateConsume:
 		if m.currentProduct != nil {
@@ -1726,6 +1779,12 @@ func (m Model) renderLookupView() string {
 		lines = append(lines, fmt.Sprintf(" %s %s",
 			ui.StyleLabel.Render("Last price:"),
 			priceLabel))
+	}
+
+	if m.currentProduct.Description != "" {
+		lines = append(lines, fmt.Sprintf(" %s %s",
+			ui.StyleLabel.Render("Notes:"),
+			m.currentProduct.Description))
 	}
 
 	if m.offInfo != nil && m.offInfo.Name != "" {

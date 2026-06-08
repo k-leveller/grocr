@@ -47,6 +47,13 @@ func LogEditName(productName, oldName string) {
 	sl.Info(fmt.Sprintf("EDIT_NAME product=%q old_name=%q", productName, oldName))
 }
 
+func LogEditNotes(productName string) {
+	if sl == nil {
+		return
+	}
+	sl.Info(fmt.Sprintf("EDIT_NOTES product=%q", productName))
+}
+
 func LogShoppingList(productName string) {
 	if sl == nil {
 		return

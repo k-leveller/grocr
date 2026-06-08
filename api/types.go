@@ -3,6 +3,7 @@ package api
 type Product struct {
 	ID                              int    `json:"id"`
 	Name                            string `json:"name"`
+	Description                     string `json:"description"`
 	LocationID                      int    `json:"location_id"`
 	ShoppingLocationID              int    `json:"shopping_location_id"`
 	QuIDPurchase                    int    `json:"qu_id_purchase"`

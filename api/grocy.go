@@ -264,6 +264,12 @@ func (c *GrocyClient) UpdateProductName(productID int, newName string) error {
 	return err
 }
 
+func (c *GrocyClient) UpdateProductDescription(productID int, description string) error {
+	data := map[string]interface{}{"description": description}
+	_, err := c.request("PUT", fmt.Sprintf("/objects/products/%d", productID), data, nil)
+	return err
+}
+
 func (c *GrocyClient) UpdateProductLocation(productID int, locationID int) error {
 	data := map[string]interface{}{"location_id": locationID}
 	_, err := c.request("PUT", fmt.Sprintf("/objects/products/%d", productID), data, nil)
