@@ -104,7 +104,7 @@ func (s *Search) filter() {
 
 	var results []api.Product
 	for _, p := range s.Products {
-		if s.LocFilter != 0 && p.LocationID != s.LocFilter {
+		if s.LocFilter != 0 && p.LocationID != 0 && p.LocationID != s.LocFilter {
 			continue
 		}
 		if query != "" && !strings.Contains(strings.ToLower(p.Name), query) {
@@ -138,8 +138,7 @@ func (s *Search) View() string {
 
 	header := " " + StyleBold.Render("Search:") + " " + s.Input.View()
 	if len(s.Locations) > 0 {
-		locLabel := StyleInfo.Render(s.locFilterName())
-		header += "  " + StyleHint.Render("[Tab: "+locLabel+"]")
+		header += "  " + StyleHint.Render("[Tab:") + " " + StyleInfo.Render(s.locFilterName()) + StyleHint.Render("]")
 	}
 	lines = append(lines, header)
 	lines = append(lines, "")
