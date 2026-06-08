@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -10,28 +11,32 @@ import (
 )
 
 type Search struct {
-	Input      textinput.Model
-	Products   []api.Product
-	Locations  []api.Location
-	LocFilter  int // 0 = all; otherwise a location ID
-	Filtered   []api.Product
-	Cursor     int
-	Selected   *api.Product
-	Cancelled  bool
-	MaxResults int
+	Input        textinput.Model
+	Products     []api.Product
+	Locations    []api.Location
+	LocFilter    int // 0 = all; otherwise a location ID
+	Filtered     []api.Product
+	Cursor       int
+	Selected     *api.Product
+	Cancelled    bool
+	MaxResults   int
+	StockAmounts map[int]float64
+	LookupMode   bool
 }
 
-func NewSearch(products []api.Product, locations []api.Location) Search {
+func NewSearch(products []api.Product, locations []api.Location, stockAmounts map[int]float64, lookupMode bool) Search {
 	ti := textinput.New()
 	ti.Placeholder = "type to search..."
 	ti.Focus()
 	ti.CharLimit = 80
 
 	return Search{
-		Input:      ti,
-		Products:   products,
-		Locations:  locations,
-		MaxResults: 10,
+		Input:        ti,
+		Products:     products,
+		Locations:    locations,
+		MaxResults:   10,
+		StockAmounts: stockAmounts,
+		LookupMode:   lookupMode,
 	}
 }
 
@@ -111,10 +116,18 @@ func (s *Search) filter() {
 			continue
 		}
 		results = append(results, p)
-		if len(results) >= s.MaxResults {
-			break
-		}
 	}
+
+	if s.LookupMode && s.StockAmounts != nil {
+		sort.SliceStable(results, func(i, j int) bool {
+			return s.StockAmounts[results[i].ID] > 0 && s.StockAmounts[results[j].ID] <= 0
+		})
+	}
+
+	if len(results) > s.MaxResults {
+		results = results[:s.MaxResults]
+	}
+
 	s.Filtered = results
 	if s.Cursor >= len(s.Filtered) {
 		s.Cursor = 0
@@ -155,7 +168,11 @@ func (s *Search) View() string {
 			if i == s.Cursor {
 				prefix = StyleInfo.Render("> ")
 			}
-			lines = append(lines, fmt.Sprintf(" %s%s  %s", prefix, p.Name, StyleHint.Render(fmt.Sprintf("[id:%d]", p.ID))))
+			name := p.Name
+			if s.LookupMode && s.StockAmounts != nil && s.StockAmounts[p.ID] <= 0 {
+				name = StyleHint.Render(name)
+			}
+			lines = append(lines, fmt.Sprintf(" %s%s  %s", prefix, name, StyleHint.Render(fmt.Sprintf("[id:%d]", p.ID))))
 		}
 	}
 

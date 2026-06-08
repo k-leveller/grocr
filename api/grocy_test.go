@@ -342,6 +342,52 @@ func TestGetStock(t *testing.T) {
 	}
 }
 
+func TestGetStockAmounts(t *testing.T) {
+	t.Run("sums amounts per product", func(t *testing.T) {
+		raw := []map[string]interface{}{
+			{"product_id": 1, "amount": 2.0},
+			{"product_id": 2, "amount": 3.0},
+			{"product_id": 1, "amount": 1.5}, // second entry for product 1 (different location)
+		}
+		client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, raw)
+		})
+		amounts, err := client.GetStockAmounts()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if amounts[1] != 3.5 {
+			t.Errorf("amounts[1] = %v, want 3.5", amounts[1])
+		}
+		if amounts[2] != 3.0 {
+			t.Errorf("amounts[2] = %v, want 3.0", amounts[2])
+		}
+	})
+
+	t.Run("empty stock returns empty map", func(t *testing.T) {
+		client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, []interface{}{})
+		})
+		amounts, err := client.GetStockAmounts()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(amounts) != 0 {
+			t.Errorf("expected empty map, got %v", amounts)
+		}
+	})
+
+	t.Run("HTTP error propagated", func(t *testing.T) {
+		client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "server error", http.StatusInternalServerError)
+		})
+		_, err := client.GetStockAmounts()
+		if err == nil {
+			t.Error("expected error, got nil")
+		}
+	})
+}
+
 func TestGetStockSnapshot(t *testing.T) {
 	// Stock entries should be returned sorted by product name
 	raw := []struct {
