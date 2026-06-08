@@ -14,6 +14,7 @@ func RenderHelp(width, height int) string {
 		"  ?       Toggle this help\n" +
 		"  ↑/↓     Cycle UPC scan history (idle input)\n" +
 		"  j/k     Navigate expiring-soon panel\n" +
+		"  d       Mark as spoiled (expiring-soon panel)\n" +
 		"  Tab/↓   Next field (form)\n" +
 		"  S-Tab/↑ Previous field (form)\n" +
 		"  Enter   Submit form\n" +
