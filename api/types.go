@@ -75,3 +75,18 @@ type StockTransaction struct {
 	Price       float64 `json:"price"`
 	ShoppingLocationID int `json:"shopping_location_id"`
 }
+
+type MealPlanItem struct {
+	ID             int     `json:"id"`
+	Day            string  `json:"day"`
+	RecipeID       *int    `json:"recipe_id"`
+	RecipeServings float64 `json:"recipe_servings"`
+	Note           string  `json:"note"`
+	ProductID      *int    `json:"product_id"`
+	ProductAmount  float64 `json:"product_amount"`
+}
+
+type Recipe struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}

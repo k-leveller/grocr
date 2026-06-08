@@ -427,6 +427,34 @@ func (c *GrocyClient) GetPurchaseHistory(productID int, limit int) ([]StockTrans
 	return txns, nil
 }
 
+func (c *GrocyClient) GetMealPlan(from, to string) ([]MealPlanItem, error) {
+	v := url.Values{}
+	v.Add("query[]", "day>="+from)
+	v.Add("query[]", "day<="+to)
+	v.Add("order[]", "day ASC")
+	data, err := c.request("GET", "/objects/meal_plan?"+v.Encode(), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var items []MealPlanItem
+	if err := json.Unmarshal(data, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (c *GrocyClient) GetRecipes() ([]Recipe, error) {
+	data, err := c.request("GET", "/objects/recipes", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var recipes []Recipe
+	if err := json.Unmarshal(data, &recipes); err != nil {
+		return nil, err
+	}
+	return recipes, nil
+}
+
 func (c *GrocyClient) GetExpiringSoon(withinDays int) ([]ExpiringItem, error) {
 	data, err := c.request("GET", "/stock", nil, nil)
 	if err != nil {

@@ -9,6 +9,7 @@ func RenderHelp(width, height int) string {
 		"  /       Search products by name\n" +
 		"  Ctrl+N  New product (no barcode)\n" +
 		"  Ctrl+E  Export stock to CSV\n" +
+		"  P       Meal plan (next 7 days)\n" +
 		"  e       Edit product name\n" +
 		"  p       Price history (lookup view)\n" +
 		"  t       Transfer stock between locations (lookup view)\n" +

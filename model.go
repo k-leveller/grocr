@@ -38,6 +38,7 @@ const (
 	StatePriceHistory
 	StateEditNotes
 	StateTransfer
+	StateMealPlan
 )
 
 type Model struct {
@@ -99,6 +100,12 @@ type Model struct {
 	upcHistory  []string
 	historyPos  int    // -1 = not navigating; 0 = most recent
 	historySave string // input value saved when history nav begins
+
+	// Meal plan
+	mealPlan        []api.MealPlanItem
+	mealPlanRecipes map[int]string
+	mealPlanLoaded  bool
+	mealPlanOffset  int
 }
 
 // Messages
@@ -148,6 +155,12 @@ type defaultsLoadedMsg struct {
 type exportResultMsg struct {
 	path string
 	err  error
+}
+
+type mealPlanMsg struct {
+	items   []api.MealPlanItem
+	recipes map[int]string
+	err     error
 }
 
 func NewModel(grocy *api.GrocyClient, off *api.OFFClient, testMode bool) Model {
@@ -370,6 +383,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case mealPlanMsg:
+		m.mealPlanLoaded = true
+		if msg.err != nil {
+			m.statusMsg = "Meal plan unavailable: " + msg.err.Error()
+			m.statusErr = true
+		} else {
+			m.mealPlan = msg.items
+			m.mealPlanRecipes = msg.recipes
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	}
@@ -437,6 +461,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleEditNotesKey(msg)
 	case StateTransfer:
 		return m.handleTransferFormKey(msg)
+	case StateMealPlan:
+		return m.handleMealPlanKey(msg)
 	}
 
 	return m, nil
@@ -544,6 +570,16 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input.SetValue("")
 		m.historyPos = -1
 		return m.startManualProductEntry()
+	case "P":
+		if m.input.Value() == "" {
+			m.state = StateMealPlan
+			m.mealPlanLoaded = false
+			m.mealPlan = nil
+			m.mealPlanRecipes = nil
+			m.mealPlanOffset = 0
+			m.input.Blur()
+			return m, m.loadMealPlan()
+		}
 	case "enter":
 		val := strings.TrimSpace(m.input.Value())
 		if val == "" {
@@ -642,6 +678,26 @@ func (m Model) loadStock() tea.Cmd {
 			return stockInfoMsg{productID: productID}
 		}
 		return stockInfoMsg{productID: productID, info: info}
+	}
+}
+
+func (m Model) loadMealPlan() tea.Cmd {
+	return func() tea.Msg {
+		if m.testMode {
+			return mealPlanMsg{items: []api.MealPlanItem{}, recipes: map[int]string{}}
+		}
+		today := time.Now().Format("2006-01-02")
+		end := time.Now().AddDate(0, 0, 6).Format("2006-01-02")
+		items, err := m.grocy.GetMealPlan(today, end)
+		if err != nil {
+			return mealPlanMsg{err: err}
+		}
+		recipes, _ := m.grocy.GetRecipes()
+		recipeMap := make(map[int]string, len(recipes))
+		for _, r := range recipes {
+			recipeMap[r.ID] = r.Name
+		}
+		return mealPlanMsg{items: items, recipes: recipeMap}
 	}
 }
 
@@ -1201,6 +1257,29 @@ func (m Model) handlePriceHistoryKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleMealPlanKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q":
+		m.state = StateIdle
+		m.statusMsg = ""
+		m.statusErr = false
+		return m, m.input.Focus()
+	case "j", "down":
+		m.mealPlanOffset++
+	case "k", "up":
+		if m.mealPlanOffset > 0 {
+			m.mealPlanOffset--
+		}
+	case "r":
+		m.mealPlanLoaded = false
+		m.mealPlan = nil
+		m.mealPlanRecipes = nil
+		m.mealPlanOffset = 0
+		return m, m.loadMealPlan()
+	}
+	return m, nil
+}
+
 func (m Model) handleShoppingListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var shoppingCmd tea.Cmd
 	if msg.String() == "y" || msg.String() == "Y" {
@@ -1672,6 +1751,8 @@ func (m Model) renderInputLine() string {
 		return " " + ui.StyleHint.Render("Tab/↓ next field  •  Enter submit  •  Esc cancel")
 	case StatePriceHistory:
 		return " " + ui.StyleHint.Render("j/k = navigate  •  Esc/p = back")
+	case StateMealPlan:
+		return " " + ui.StyleHint.Render("j/k = scroll  •  r = refresh  •  Esc/q = back")
 	case StateEditNotes:
 		return " " + ui.StyleHint.Render("Enter to save  •  Esc to cancel")
 	case StateShoppingListPrompt:
@@ -1735,6 +1816,8 @@ func (m Model) renderMainContent(width, bodyH int) string {
 		sections = append(sections, m.form.View())
 	case StatePriceHistory:
 		sections = append(sections, m.renderPriceHistoryView(bodyH))
+	case StateMealPlan:
+		sections = append(sections, m.renderMealPlanView(bodyH))
 	case StateShoppingListPrompt:
 		if m.currentProduct != nil {
 			sections = append(sections, fmt.Sprintf(" %s %s",
@@ -2006,6 +2089,120 @@ func (m Model) renderPriceHistoryView(bodyH int) string {
 		lines = append(lines, fmt.Sprintf("%s%s  %s%s",
 			prefix, ui.StyleLabel.Render(date), priceStr, storeName))
 	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) renderMealPlanView(bodyH int) string {
+	var lines []string
+	lines = append(lines, " "+ui.StyleBold.Render("Meal Plan — Next 7 Days"))
+	lines = append(lines, "")
+
+	if !m.mealPlanLoaded {
+		lines = append(lines, " "+ui.StyleHint.Render("Loading..."))
+		return strings.Join(lines, "\n")
+	}
+	if len(m.mealPlan) == 0 {
+		lines = append(lines, " "+ui.StyleHint.Render("No meals planned for the next 7 days."))
+		return strings.Join(lines, "\n")
+	}
+
+	today := time.Now().Format("2006-01-02")
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+
+	// Group items by day preserving order (items are sorted by day from API)
+	type group struct {
+		day   string
+		items []api.MealPlanItem
+	}
+	var groups []group
+	dayIndex := map[string]int{}
+	for _, item := range m.mealPlan {
+		if idx, ok := dayIndex[item.Day]; ok {
+			groups[idx].items = append(groups[idx].items, item)
+		} else {
+			dayIndex[item.Day] = len(groups)
+			groups = append(groups, group{day: item.Day, items: []api.MealPlanItem{item}})
+		}
+	}
+
+	// Build scrollable content lines
+	var content []string
+	for _, g := range groups {
+		t, err := time.Parse("2006-01-02", g.day)
+		var dayLabel string
+		if err != nil {
+			dayLabel = g.day
+		} else {
+			switch g.day {
+			case today:
+				dayLabel = t.Format("Mon Jan 02") + "  " + ui.StyleSuccess.Render("(Today)")
+			case tomorrow:
+				dayLabel = t.Format("Mon Jan 02") + "  " + ui.StyleInfo.Render("(Tomorrow)")
+			default:
+				dayLabel = t.Format("Mon Jan 02")
+			}
+		}
+		content = append(content, " "+ui.StyleLabel.Render(dayLabel))
+
+		for _, item := range g.items {
+			var desc string
+			switch {
+			case item.RecipeID != nil:
+				name, ok := m.mealPlanRecipes[*item.RecipeID]
+				if !ok {
+					name = fmt.Sprintf("Recipe #%d", *item.RecipeID)
+				}
+				if item.RecipeServings > 0 {
+					desc = fmt.Sprintf("%s  %s", name, ui.StyleHint.Render(fmt.Sprintf("(%.0f srv)", item.RecipeServings)))
+				} else {
+					desc = name
+				}
+			case item.ProductID != nil:
+				name := fmt.Sprintf("Product #%d", *item.ProductID)
+				for _, p := range m.allProducts {
+					if p.ID == *item.ProductID {
+						name = p.Name
+						break
+					}
+				}
+				if item.ProductAmount > 0 {
+					desc = fmt.Sprintf("%s  %s", name, ui.StyleHint.Render(fmt.Sprintf("×%.0f", item.ProductAmount)))
+				} else {
+					desc = name
+				}
+			case item.Note != "":
+				desc = item.Note
+			default:
+				continue
+			}
+			content = append(content, "   • "+desc)
+			if item.Note != "" && (item.RecipeID != nil || item.ProductID != nil) {
+				content = append(content, "     "+ui.StyleHint.Render(item.Note))
+			}
+		}
+		content = append(content, "")
+	}
+
+	// Clamp scroll offset
+	headerLines := len(lines)
+	maxVisible := bodyH - headerLines
+	if maxVisible < 1 {
+		maxVisible = 1
+	}
+	maxOffset := len(content) - maxVisible
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if m.mealPlanOffset > maxOffset {
+		m.mealPlanOffset = maxOffset
+	}
+
+	end := m.mealPlanOffset + maxVisible
+	if end > len(content) {
+		end = len(content)
+	}
+	lines = append(lines, content[m.mealPlanOffset:end]...)
 
 	return strings.Join(lines, "\n")
 }
