@@ -277,7 +277,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.offInfo = nil
 		m.stockInfo = nil
 		m.input.SetValue("")
-		return m, tea.Batch(m.input.Focus(), m.loadExpiringSoon())
+		cmds := []tea.Cmd{m.input.Focus()}
+		if msg.err == nil {
+			cmds = append(cmds, m.loadExpiringSoon())
+		}
+		return m, tea.Batch(cmds...)
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -1232,11 +1236,7 @@ func (m Model) renderMainContent(width int) string {
 	case StateDisplay, StateForm:
 		sections = append(sections, m.renderProductInfo())
 		sections = append(sections, "")
-		if m.state == StateEditName {
-			sections = append(sections, " "+ui.StyleBold.Render("Edit name: ")+m.editInput.View())
-		} else {
-			sections = append(sections, m.form.View())
-		}
+		sections = append(sections, m.form.View())
 	case StateEditName:
 		sections = append(sections, m.renderProductInfo())
 		sections = append(sections, "")
