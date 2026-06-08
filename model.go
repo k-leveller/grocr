@@ -548,7 +548,7 @@ func (m Model) buildNewProductForm() ui.Form {
 		{Label: "Location", Default: locationDefault, Hint: locationHint},
 		{Label: "Store", Default: storeDefault, Hint: storeHint},
 		{Label: "Quantity", Default: "1"},
-		{Label: "Price", Default: ""},
+		{Label: "Price", Default: "", Hint: "total price paid"},
 	}
 
 	return ui.NewForm(fields)
@@ -616,7 +616,7 @@ func (m Model) buildExistingProductForm() ui.Form {
 		{Label: "Location", Default: locationDefault, Hint: locationHint},
 		{Label: "Store", Default: storeDefault, Hint: storeHint},
 		{Label: "Quantity", Default: "1", Hint: qtyUnitHint},
-		{Label: "Price", Default: ""},
+		{Label: "Price", Default: "", Hint: "total price paid"},
 	}
 
 	return ui.NewForm(fields)
