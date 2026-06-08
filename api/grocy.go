@@ -369,9 +369,16 @@ func (c *GrocyClient) GetProductUserfields(productID int) (map[string]string, er
 	if err != nil {
 		return nil, err
 	}
-	var fields map[string]string
-	if err := json.Unmarshal(data, &fields); err != nil {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
+	}
+	fields := make(map[string]string, len(raw))
+	for k, v := range raw {
+		var s string
+		if json.Unmarshal(v, &s) == nil {
+			fields[k] = s
+		}
 	}
 	return fields, nil
 }
