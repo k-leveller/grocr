@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -11,32 +12,34 @@ import (
 )
 
 type Search struct {
-	Input        textinput.Model
-	Products     []api.Product
-	Locations    []api.Location
-	LocFilter    int // 0 = all; otherwise a location ID
-	Filtered     []api.Product
-	Cursor       int
-	Selected     *api.Product
-	Cancelled    bool
-	MaxResults   int
-	StockAmounts map[int]float64
-	LookupMode   bool
+	Input         textinput.Model
+	Products      []api.Product
+	Locations     []api.Location
+	QuantityUnits []api.QuantityUnit
+	LocFilter     int // 0 = all; otherwise a location ID
+	Filtered      []api.Product
+	Cursor        int
+	Selected      *api.Product
+	Cancelled     bool
+	MaxResults    int
+	StockAmounts  map[int]float64
+	LookupMode    bool
 }
 
-func NewSearch(products []api.Product, locations []api.Location, stockAmounts map[int]float64, lookupMode bool) Search {
+func NewSearch(products []api.Product, locations []api.Location, quantityUnits []api.QuantityUnit, stockAmounts map[int]float64, lookupMode bool) Search {
 	ti := textinput.New()
 	ti.Placeholder = "type to search..."
 	ti.Focus()
 	ti.CharLimit = 80
 
 	return Search{
-		Input:        ti,
-		Products:     products,
-		Locations:    locations,
-		MaxResults:   10,
-		StockAmounts: stockAmounts,
-		LookupMode:   lookupMode,
+		Input:         ti,
+		Products:      products,
+		Locations:     locations,
+		QuantityUnits: quantityUnits,
+		MaxResults:    10,
+		StockAmounts:  stockAmounts,
+		LookupMode:    lookupMode,
 	}
 }
 
@@ -146,6 +149,31 @@ func (s *Search) locFilterName() string {
 	return "unknown"
 }
 
+func (s *Search) locationName(id int) string {
+	for _, loc := range s.Locations {
+		if loc.ID == id {
+			return loc.Name
+		}
+	}
+	return ""
+}
+
+func (s *Search) unitName(id int) string {
+	for _, u := range s.QuantityUnits {
+		if u.ID == id {
+			return u.Name
+		}
+	}
+	return ""
+}
+
+func formatQty(qty float64) string {
+	if qty == float64(int64(qty)) {
+		return strconv.FormatInt(int64(qty), 10)
+	}
+	return strconv.FormatFloat(qty, 'f', 2, 64)
+}
+
 func (s *Search) View() string {
 	var lines []string
 
@@ -169,10 +197,34 @@ func (s *Search) View() string {
 				prefix = StyleInfo.Render("> ")
 			}
 			name := p.Name
-			if s.LookupMode && s.StockAmounts != nil && s.StockAmounts[p.ID] <= 0 {
+			zeroStock := s.StockAmounts != nil && s.StockAmounts[p.ID] <= 0
+			if s.LookupMode && zeroStock {
 				name = StyleHint.Render(name)
 			}
-			lines = append(lines, fmt.Sprintf(" %s%s  %s", prefix, name, StyleHint.Render(fmt.Sprintf("[id:%d]", p.ID))))
+
+			var meta []string
+			if s.StockAmounts != nil {
+				qty := s.StockAmounts[p.ID]
+				unit := s.unitName(p.QuIDStock)
+				qtyStr := formatQty(qty)
+				if unit != "" {
+					qtyStr += " " + unit
+				}
+				if qty <= 0 {
+					meta = append(meta, StyleHint.Render(qtyStr))
+				} else {
+					meta = append(meta, qtyStr)
+				}
+			}
+			if loc := s.locationName(p.LocationID); loc != "" {
+				meta = append(meta, StyleHint.Render(loc))
+			}
+
+			line := fmt.Sprintf(" %s%s", prefix, name)
+			if len(meta) > 0 {
+				line += "  " + strings.Join(meta, StyleHint.Render(" · "))
+			}
+			lines = append(lines, line)
 		}
 	}
 
