@@ -62,7 +62,8 @@ type Model struct {
 	testMode bool
 
 	// Product cache for search
-	allProducts []api.Product
+	allProducts  []api.Product
+	stockAmounts map[int]float64
 
 	// Current scan context
 	currentUPC     string
@@ -150,6 +151,10 @@ type productsLoadedMsg struct {
 	products []api.Product
 }
 
+type stockAmountsLoadedMsg struct {
+	amounts map[int]float64
+}
+
 type expiringSoonMsg struct {
 	items []api.ExpiringItem
 	err   error
@@ -212,7 +217,18 @@ func (m Model) Init() tea.Cmd {
 		m.loadDefaults(),
 		m.loadProducts(),
 		m.loadExpiringSoon(),
+		m.loadStockAmounts(),
 	)
+}
+
+func (m Model) loadStockAmounts() tea.Cmd {
+	return func() tea.Msg {
+		if m.testMode {
+			return stockAmountsLoadedMsg{amounts: map[int]float64{1: 3}}
+		}
+		amounts, _ := m.grocy.GetStockAmounts()
+		return stockAmountsLoadedMsg{amounts: amounts}
+	}
 }
 
 func (m Model) loadExpiringSoon() tea.Cmd {
@@ -298,6 +314,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case productsLoadedMsg:
 		m.allProducts = msg.products
+		return m, nil
+
+	case stockAmountsLoadedMsg:
+		m.stockAmounts = msg.amounts
 		return m, nil
 
 	case expiringSoonMsg:
@@ -664,7 +684,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.defaults != nil {
 				locs = m.defaults.Locations
 			}
-			m.search = ui.NewSearch(m.allProducts, locs)
+			m.search = ui.NewSearch(m.allProducts, locs, m.stockAmounts, m.mode == "lookup")
 			m.input.Blur()
 			return m, nil
 		}
@@ -1346,7 +1366,7 @@ func (m Model) handleUnknownBarcodeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.defaults != nil {
 			locs = m.defaults.Locations
 		}
-		m.search = ui.NewSearch(m.allProducts, locs)
+		m.search = ui.NewSearch(m.allProducts, locs, m.stockAmounts, false)
 		return m, nil
 	case "esc":
 		m.state = StateIdle

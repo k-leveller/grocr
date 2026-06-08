@@ -406,6 +406,25 @@ func (c *GrocyClient) AddToShoppingList(productID int) error {
 	return err
 }
 
+func (c *GrocyClient) GetStockAmounts() (map[int]float64, error) {
+	data, err := c.request("GET", "/stock", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var raw []struct {
+		ProductID int     `json:"product_id"`
+		Amount    float64 `json:"amount"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	amounts := make(map[int]float64, len(raw))
+	for _, e := range raw {
+		amounts[e.ProductID] += e.Amount
+	}
+	return amounts, nil
+}
+
 func (c *GrocyClient) GetStockSnapshot() ([]StockEntry, error) {
 	data, err := c.request("GET", "/stock", nil, nil)
 	if err != nil {
