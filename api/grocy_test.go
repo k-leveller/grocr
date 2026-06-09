@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -568,16 +569,41 @@ func TestGetRecipe(t *testing.T) {
 }
 
 func TestGetRecipeFulfillment(t *testing.T) {
-	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, RecipeFulfillment{RecipeID: 1, NeedFulfilled: true})
+	t.Run("native types", func(t *testing.T) {
+		client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, RecipeFulfillment{RecipeID: 1, NeedFulfilled: true})
+		})
+		f, err := client.GetRecipeFulfillment(1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !f.NeedFulfilled {
+			t.Error("expected NeedFulfilled = true")
+		}
 	})
-	f, err := client.GetRecipeFulfillment(1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !f.NeedFulfilled {
-		t.Error("expected NeedFulfilled = true")
-	}
+
+	t.Run("string-encoded values (Grocy API quirk)", func(t *testing.T) {
+		client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"recipe_id":"3","need_fulfilled":"1","need_fulfilled_with_shopping_list":"0","missing_products_count":"2"}`)
+		})
+		f, err := client.GetRecipeFulfillment(3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f.RecipeID != 3 {
+			t.Errorf("RecipeID = %d, want 3", f.RecipeID)
+		}
+		if !f.NeedFulfilled {
+			t.Error("expected NeedFulfilled = true")
+		}
+		if f.NeedFulfilledWithShoppingList {
+			t.Error("expected NeedFulfilledWithShoppingList = false")
+		}
+		if f.MissingProductsCount != 2 {
+			t.Errorf("MissingProductsCount = %d, want 2", f.MissingProductsCount)
+		}
+	})
 }
 
 func TestCreateProduct(t *testing.T) {

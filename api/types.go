@@ -1,5 +1,10 @@
 package api
 
+import (
+	"encoding/json"
+	"strconv"
+)
+
 type Product struct {
 	ID                              int    `json:"id"`
 	Name                            string `json:"name"`
@@ -99,4 +104,62 @@ type RecipeFulfillment struct {
 	NeedFulfilled                 bool `json:"need_fulfilled"`
 	NeedFulfilledWithShoppingList bool `json:"need_fulfilled_with_shopping_list"`
 	MissingProductsCount          int  `json:"missing_products_count"`
+}
+
+// UnmarshalJSON handles Grocy returning numeric/bool fields as JSON strings
+// (e.g. "need_fulfilled":"0") instead of native types.
+func (r *RecipeFulfillment) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		RecipeID                      json.RawMessage `json:"recipe_id"`
+		NeedFulfilled                 json.RawMessage `json:"need_fulfilled"`
+		NeedFulfilledWithShoppingList json.RawMessage `json:"need_fulfilled_with_shopping_list"`
+		MissingProductsCount          json.RawMessage `json:"missing_products_count"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	r.RecipeID = parseFlexInt(raw.RecipeID)
+	r.NeedFulfilled = parseFlexBool(raw.NeedFulfilled)
+	r.NeedFulfilledWithShoppingList = parseFlexBool(raw.NeedFulfilledWithShoppingList)
+	r.MissingProductsCount = parseFlexInt(raw.MissingProductsCount)
+	return nil
+}
+
+// parseFlexBool decodes a JSON value that may be a native bool, an integer
+// 0/1, or a quoted string "0"/"1"/"true"/"false".
+func parseFlexBool(data json.RawMessage) bool {
+	if len(data) == 0 {
+		return false
+	}
+	var b bool
+	if json.Unmarshal(data, &b) == nil {
+		return b
+	}
+	var n int
+	if json.Unmarshal(data, &n) == nil {
+		return n != 0
+	}
+	var s string
+	if json.Unmarshal(data, &s) == nil {
+		return s == "1" || s == "true"
+	}
+	return false
+}
+
+// parseFlexInt decodes a JSON value that may be a native integer or a quoted
+// string like "2".
+func parseFlexInt(data json.RawMessage) int {
+	if len(data) == 0 {
+		return 0
+	}
+	var n int
+	if json.Unmarshal(data, &n) == nil {
+		return n
+	}
+	var s string
+	if json.Unmarshal(data, &s) == nil {
+		v, _ := strconv.Atoi(s)
+		return v
+	}
+	return 0
 }
