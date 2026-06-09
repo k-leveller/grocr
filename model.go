@@ -970,10 +970,24 @@ func (m Model) loadRecipeList() tea.Cmd {
 			}
 		}
 		fulfillment := make(map[int]api.RecipeFulfillment, len(recipes))
-		for _, r := range recipes {
-			f, err := m.grocy.GetRecipeFulfillment(r.ID)
-			if err == nil && f != nil {
-				fulfillment[r.ID] = *f
+		if all, err := m.grocy.GetAllRecipeFulfillments(); err == nil {
+			byID := make(map[int]api.RecipeFulfillment, len(all))
+			for _, f := range all {
+				byID[f.RecipeID] = f
+			}
+			for _, r := range recipes {
+				if f, ok := byID[r.ID]; ok {
+					fulfillment[r.ID] = f
+				}
+			}
+		} else {
+			// Older Grocy versions lack the batch endpoint; fall back to
+			// fetching fulfillment per recipe.
+			for _, r := range recipes {
+				f, err := m.grocy.GetRecipeFulfillment(r.ID)
+				if err == nil && f != nil {
+					fulfillment[r.ID] = *f
+				}
 			}
 		}
 		return recipeListMsg{seq: seq, recipes: recipes, fulfillment: fulfillment}

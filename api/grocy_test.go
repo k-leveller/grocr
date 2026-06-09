@@ -612,6 +612,61 @@ func TestGetRecipeFulfillment(t *testing.T) {
 	})
 }
 
+func TestGetAllRecipeFulfillments(t *testing.T) {
+	t.Run("multiple entries with numeric booleans and extra fields", func(t *testing.T) {
+		client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if !strings.HasSuffix(r.URL.Path, "/recipes/fulfillment") {
+				t.Errorf("unexpected path %s", r.URL.Path)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `[
+				{"recipe_id":1,"need_fulfilled":1,"need_fulfilled_with_shopping_list":0,"missing_products_count":0,"costs":28.3,"calories":3332},
+				{"recipe_id":2,"need_fulfilled":0,"need_fulfilled_with_shopping_list":1,"missing_products_count":3,"costs":9.4,"calories":492}
+			]`)
+		})
+		fs, err := client.GetAllRecipeFulfillments()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(fs) != 2 {
+			t.Fatalf("len = %d, want 2", len(fs))
+		}
+		if fs[0].RecipeID != 1 || !fs[0].NeedFulfilled || fs[0].MissingProductsCount != 0 {
+			t.Errorf("fs[0] = %+v, want recipe 1 fulfilled", fs[0])
+		}
+		if fs[1].RecipeID != 2 || fs[1].NeedFulfilled || !fs[1].NeedFulfilledWithShoppingList || fs[1].MissingProductsCount != 3 {
+			t.Errorf("fs[1] = %+v, want recipe 2 fulfillable with shopping list, 3 missing", fs[1])
+		}
+	})
+
+	t.Run("string-encoded values (Grocy API quirk)", func(t *testing.T) {
+		client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `[{"recipe_id":"3","need_fulfilled":"1","need_fulfilled_with_shopping_list":"0","missing_products_count":"2"}]`)
+		})
+		fs, err := client.GetAllRecipeFulfillments()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(fs) != 1 {
+			t.Fatalf("len = %d, want 1", len(fs))
+		}
+		if fs[0].RecipeID != 3 || !fs[0].NeedFulfilled || fs[0].MissingProductsCount != 2 {
+			t.Errorf("fs[0] = %+v, want recipe 3 fulfilled with 2 missing", fs[0])
+		}
+	})
+
+	t.Run("HTTP error", func(t *testing.T) {
+		client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "not found", http.StatusNotFound)
+		})
+		_, err := client.GetAllRecipeFulfillments()
+		if err == nil {
+			t.Error("expected error for 404, got nil")
+		}
+	})
+}
+
 func TestCreateProduct(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
