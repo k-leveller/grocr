@@ -27,6 +27,18 @@ const (
 	expPanelMinWidth = 100
 )
 
+// Package-level compiled regexps used by htmlToLines.
+var (
+	reOLBlock     = regexp.MustCompile(`(?is)<ol[^>]*>.*?</ol>`)
+	reLIOpen      = regexp.MustCompile(`(?is)<li[^>]*>`)
+	reLIClose     = regexp.MustCompile(`(?is)</li>`)
+	rePClose      = regexp.MustCompile(`(?is)</p>`)
+	rePOpen       = regexp.MustCompile(`(?is)<p[^>]*>`)
+	reBR          = regexp.MustCompile(`(?is)<br\s*/?>`)
+	reBlockElem   = regexp.MustCompile(`(?is)</?(?:ul|ol|div|blockquote|pre|hr|table|tr|td|th)[^>]*>`)
+	reStripTags   = regexp.MustCompile(`<[^>]*>`)
+)
+
 type AppState int
 
 const (
@@ -129,6 +141,7 @@ type Model struct {
 
 	// Recipe detail
 	recipeDetail       *api.Recipe
+	recipeDetailLines  []string // parsed description lines, cached on load
 	recipeDetailLoaded bool
 	recipeDetailScroll int
 	recipeDetailSeq    int
@@ -500,6 +513,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = StateRecipeList
 		} else {
 			m.recipeDetail = msg.recipe
+			m.recipeDetailLines = htmlToLines(msg.recipe.Description)
+			m.recipeDetailScroll = 0
 		}
 		return m, nil
 
@@ -974,7 +989,9 @@ func (m Model) handleRecipeDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = StateRecipeList
 		return m, nil
 	case "j", "down":
-		m.recipeDetailScroll++
+		if m.recipeDetailScroll < len(m.recipeDetailLines)-1 {
+			m.recipeDetailScroll++
+		}
 	case "k", "up":
 		if m.recipeDetailScroll > 0 {
 			m.recipeDetailScroll--
@@ -1018,6 +1035,7 @@ func (m Model) handleRecipeListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			r := m.recipeList[m.recipeListCursor]
 			m.state = StateRecipeDetail
 			m.recipeDetail = nil
+			m.recipeDetailLines = nil
 			m.recipeDetailLoaded = false
 			m.recipeDetailScroll = 0
 			m.recipeDetailSeq++
@@ -2923,12 +2941,12 @@ func (m Model) renderRecipeDetailView(bodyH int) string {
 	lines = append(lines, " "+ui.StyleBold.Render(name))
 	lines = append(lines, "")
 
-	if m.recipeDetail.Description == "" {
+	if len(m.recipeDetailLines) == 0 {
 		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.NoRecipeDescription))
 		return strings.Join(lines, "\n")
 	}
 
-	descLines := htmlToLines(m.recipeDetail.Description)
+	descLines := m.recipeDetailLines
 
 	headerLines := len(lines)
 	maxVisible := bodyH - headerLines
@@ -2964,18 +2982,17 @@ func htmlToLines(src string) []string {
 	s = strings.ReplaceAll(s, "\r", "\n")
 
 	// Number ordered list items before unordered processing replaces <li>
-	olRe := regexp.MustCompile(`(?is)<ol[^>]*>.*?</ol>`)
-	s = olRe.ReplaceAllStringFunc(s, func(block string) string {
+	s = reOLBlock.ReplaceAllStringFunc(s, func(block string) string {
 		n := 0
-		return regexp.MustCompile(`(?is)<li[^>]*>`).ReplaceAllStringFunc(block, func(_ string) string {
+		return reLIOpen.ReplaceAllStringFunc(block, func(_ string) string {
 			n++
 			return fmt.Sprintf("\n%d. ", n)
 		})
 	})
 
 	// Remaining (unordered) list items → bullets
-	s = regexp.MustCompile(`(?is)<li[^>]*>`).ReplaceAllString(s, "\n• ")
-	s = regexp.MustCompile(`(?is)</li>`).ReplaceAllString(s, "")
+	s = reLIOpen.ReplaceAllString(s, "\n• ")
+	s = reLIClose.ReplaceAllString(s, "")
 
 	// Headers → uppercase on their own line
 	for _, tag := range []string{"h1", "h2", "h3", "h4", "h5", "h6"} {
@@ -2983,7 +3000,7 @@ func htmlToLines(src string) []string {
 		s = re.ReplaceAllStringFunc(s, func(match string) string {
 			sub := re.FindStringSubmatch(match)
 			if len(sub) > 1 {
-				inner := regexp.MustCompile(`<[^>]*>`).ReplaceAllString(sub[1], "")
+				inner := reStripTags.ReplaceAllString(sub[1], "")
 				return "\n\n" + strings.ToUpper(strings.TrimSpace(html.UnescapeString(inner))) + "\n"
 			}
 			return match
@@ -2991,13 +3008,13 @@ func htmlToLines(src string) []string {
 	}
 
 	// Block elements and explicit breaks → newlines
-	s = regexp.MustCompile(`(?is)</p>`).ReplaceAllString(s, "\n")
-	s = regexp.MustCompile(`(?is)<p[^>]*>`).ReplaceAllString(s, "\n")
-	s = regexp.MustCompile(`(?is)<br\s*/?>`).ReplaceAllString(s, "\n")
-	s = regexp.MustCompile(`(?is)</?(?:ul|ol|div|blockquote|pre|hr|table|tr|td|th)[^>]*>`).ReplaceAllString(s, "\n")
+	s = rePClose.ReplaceAllString(s, "\n")
+	s = rePOpen.ReplaceAllString(s, "\n")
+	s = reBR.ReplaceAllString(s, "\n")
+	s = reBlockElem.ReplaceAllString(s, "\n")
 
 	// Strip all remaining tags
-	s = regexp.MustCompile(`<[^>]*>`).ReplaceAllString(s, "")
+	s = reStripTags.ReplaceAllString(s, "")
 
 	// Decode HTML entities (&amp; &lt; &nbsp; etc.)
 	s = html.UnescapeString(s)
