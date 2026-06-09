@@ -103,6 +103,8 @@ func (s *Search) Update(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
+func (s *Search) UpdateFilter() { s.filter() }
+
 func (s *Search) filter() {
 	query := strings.ToLower(s.Input.Value())
 	if query == "" && s.LocFilter == 0 {

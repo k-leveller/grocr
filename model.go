@@ -319,6 +319,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case stockAmountsLoadedMsg:
 		m.stockAmounts = msg.amounts
+		if m.state == StateSearch {
+			m.search.StockAmounts = msg.amounts
+			m.search.UpdateFilter()
+		}
 		return m, nil
 
 	case expiringSoonMsg:
@@ -393,7 +397,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.err == nil && msg.zeroedStock && m.currentProduct != nil {
 			m.state = StateShoppingListPrompt
-			return m, nil
+			return m, m.loadStockAmounts()
 		}
 		m.state = StateIdle
 		m.currentProduct = nil
@@ -402,7 +406,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.SetValue("")
 		cmds := []tea.Cmd{m.input.Focus()}
 		if msg.err == nil {
-			cmds = append(cmds, m.loadExpiringSoon())
+			cmds = append(cmds, m.loadExpiringSoon(), m.loadStockAmounts())
 		}
 		return m, tea.Batch(cmds...)
 
@@ -1608,7 +1612,7 @@ func (m Model) handleShoppingListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.offInfo = nil
 	m.stockInfo = nil
 	m.input.SetValue("")
-	cmds := []tea.Cmd{m.input.Focus(), m.loadExpiringSoon()}
+	cmds := []tea.Cmd{m.input.Focus(), m.loadExpiringSoon(), m.loadStockAmounts()}
 	if shoppingCmd != nil {
 		cmds = append(cmds, shoppingCmd)
 	}
