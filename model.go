@@ -401,7 +401,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.SetValue("")
 		cmds := []tea.Cmd{m.input.Focus()}
 		if msg.err == nil {
-			cmds = append(cmds, m.loadExpiringSoon())
+			cmds = append(cmds, m.loadExpiringSoon(), m.loadStockAmounts())
 		}
 		return m, tea.Batch(cmds...)
 
@@ -1607,7 +1607,7 @@ func (m Model) handleShoppingListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.offInfo = nil
 	m.stockInfo = nil
 	m.input.SetValue("")
-	cmds := []tea.Cmd{m.input.Focus(), m.loadExpiringSoon()}
+	cmds := []tea.Cmd{m.input.Focus(), m.loadExpiringSoon(), m.loadStockAmounts()}
 	if shoppingCmd != nil {
 		cmds = append(cmds, shoppingCmd)
 	}
