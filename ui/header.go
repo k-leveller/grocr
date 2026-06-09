@@ -8,7 +8,7 @@ import (
 )
 
 func RenderHeader(mode string, width int) string {
-	title := StyleHeader.Render("GROCY SCANNER")
+	title := StyleHeader.Render("GROCR")
 
 	var modeBadge string
 	switch mode {
