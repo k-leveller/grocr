@@ -25,6 +25,7 @@ type Strings struct {
 	ErrExport               string // %s = error
 	ErrMealPlan             string // %s = error
 	ErrLoadRecipes          string // %s = error
+	ErrLoadRecipeDetail     string // %s = error
 	ErrLinkBarcode          string // %s = error
 	ErrUpdateName           string // %s = error
 	ErrUpdateNotes          string // %s = error
@@ -61,6 +62,7 @@ type Strings struct {
 	HintMealPlan      string
 	HintTodayMealPlan string
 	HintRecipeList    string
+	HintRecipeDetail  string
 	HintEditNotes     string
 	HintYesNo          string
 	HintUnknownBarcode string
@@ -158,6 +160,7 @@ type Strings struct {
 	// ── Recipes ───────────────────────────────────────────────────────────────
 	RecipesHeader         string
 	NoRecipes             string
+	NoRecipeDescription   string
 	FmtMissingIngredients string // %d = missing ingredient count
 	FmtRecipeID           string // %d = recipe ID (fallback when name is unknown)
 	FmtServings           string // %.0f = serving count
@@ -203,6 +206,7 @@ var English = Strings{
 	ErrExport:                 "Export failed: %s",
 	ErrMealPlan:               "Meal plan unavailable: %s",
 	ErrLoadRecipes:            "Failed to load recipes: %s",
+	ErrLoadRecipeDetail:       "Failed to load recipe: %s",
 	ErrLinkBarcode:            "Link failed: %s",
 	ErrUpdateName:             "Error updating name: %s",
 	ErrUpdateNotes:            "Error updating notes: %s",
@@ -238,7 +242,8 @@ var English = Strings{
 	HintPriceHistory:   "↑/↓/j/k = navigate  •  Esc/p = back",
 	HintMealPlan:       "↑/↓/j/k = scroll  •  r = refresh  •  Esc/q = back",
 	HintTodayMealPlan:  "r = refresh  •  Esc/q = back",
-	HintRecipeList:     "↑/↓/j/k = navigate  •  r = refresh  •  Esc/q = back",
+	HintRecipeList:     "↑/↓/j/k = navigate  •  Enter/→ = view  •  r = refresh  •  Esc/q = back",
+	HintRecipeDetail:   "↑/↓/j/k = scroll  •  ←/h/q/Esc = back",
 	HintEditNotes:      "Enter to save  •  Esc to cancel",
 	HintYesNo:          "y = yes, any other key = no",
 	HintUnknownBarcode: "C/Enter = create new  •  L = link existing  •  Esc = cancel",
@@ -336,6 +341,7 @@ var English = Strings{
 	// Recipes
 	RecipesHeader:         "Recipes",
 	NoRecipes:             "No recipes found.",
+	NoRecipeDescription:   "No description available.",
 	FmtMissingIngredients: "(%d missing)",
 	FmtRecipeID:           "Recipe #%d",
 	FmtServings:           "(%.0f srv)",
@@ -360,7 +366,7 @@ var English = Strings{
 		"  x       Export stock to CSV\n" +
 		"  t       Today's meal plan (compact)\n" +
 		"  P       Meal plan (next 7 days, scrollable)\n" +
-		"  r       Recipe list (fulfillability)\n" +
+		"  r       Recipe list (fulfillability), Enter/→ to view details\n" +
 		"  e       Edit product name\n" +
 		"  p       Price history (lookup view)\n" +
 		"  t       Transfer stock between locations (lookup view)\n" +

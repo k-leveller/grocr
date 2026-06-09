@@ -88,8 +88,10 @@ type MealPlanItem struct {
 }
 
 type Recipe struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	BaseServings int    `json:"base_servings"`
 }
 
 type RecipeFulfillment struct {

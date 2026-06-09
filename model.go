@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
+	"html"
 	"math"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,6 +25,18 @@ import (
 const (
 	expPanelWidth    = 28
 	expPanelMinWidth = 100
+)
+
+// Package-level compiled regexps used by htmlToLines.
+var (
+	reOLBlock     = regexp.MustCompile(`(?is)<ol[^>]*>.*?</ol>`)
+	reLIOpen      = regexp.MustCompile(`(?is)<li[^>]*>`)
+	reLIClose     = regexp.MustCompile(`(?is)</li>`)
+	rePClose      = regexp.MustCompile(`(?is)</p>`)
+	rePOpen       = regexp.MustCompile(`(?is)<p[^>]*>`)
+	reBR          = regexp.MustCompile(`(?is)<br\s*/?>`)
+	reBlockElem   = regexp.MustCompile(`(?is)</?(?:ul|ol|div|blockquote|pre|hr|table|tr|td|th)[^>]*>`)
+	reStripTags   = regexp.MustCompile(`<[^>]*>`)
 )
 
 type AppState int
@@ -45,6 +59,7 @@ const (
 	StateRecipeList
 	StateTodayMealPlan
 	StateExpiringDetail
+	StateRecipeDetail
 )
 
 type Model struct {
@@ -123,6 +138,13 @@ type Model struct {
 	recipeListLoaded  bool
 	recipeListCursor  int
 	recipeListSeq     int
+
+	// Recipe detail
+	recipeDetail       *api.Recipe
+	recipeDetailLines  []string // parsed description lines, cached on load
+	recipeDetailLoaded bool
+	recipeDetailScroll int
+	recipeDetailSeq    int
 }
 
 // Messages
@@ -194,6 +216,12 @@ type recipeListMsg struct {
 	recipes     []api.Recipe
 	fulfillment map[int]api.RecipeFulfillment
 	err         error
+}
+
+type recipeDetailMsg struct {
+	seq    int
+	recipe *api.Recipe
+	err    error
 }
 
 func NewModel(grocy *api.GrocyClient, off *api.OFFClient, testMode bool) Model {
@@ -474,6 +502,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case recipeDetailMsg:
+		if msg.seq != m.recipeDetailSeq {
+			return m, nil
+		}
+		m.recipeDetailLoaded = true
+		if msg.err != nil {
+			m.statusMsg = fmt.Sprintf(locale.Active.ErrLoadRecipeDetail, msg.err.Error())
+			m.statusErr = true
+			m.state = StateRecipeList
+		} else {
+			m.recipeDetail = msg.recipe
+			m.recipeDetailLines = htmlToLines(msg.recipe.Description)
+			m.recipeDetailScroll = 0
+		}
+		return m, nil
+
 	case linkBarcodeResultMsg:
 		if msg.err != nil {
 			logger.LogError("link barcode: " + msg.err.Error())
@@ -567,6 +611,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleUnknownBarcodeKey(msg)
 	case StateRecipeList:
 		return m.handleRecipeListKey(msg)
+	case StateRecipeDetail:
+		return m.handleRecipeDetailKey(msg)
 	case StateExpiringDetail:
 		return m.handleExpiringDetailKey(msg)
 	}
@@ -924,6 +970,36 @@ func (m Model) loadRecipeList() tea.Cmd {
 	}
 }
 
+func (m Model) loadRecipeDetail(id int) tea.Cmd {
+	seq := m.recipeDetailSeq
+	if m.testMode {
+		return func() tea.Msg {
+			return recipeDetailMsg{seq: seq, recipe: &api.Recipe{ID: id, Name: "Test Recipe"}}
+		}
+	}
+	return func() tea.Msg {
+		r, err := m.grocy.GetRecipe(id)
+		return recipeDetailMsg{seq: seq, recipe: r, err: err}
+	}
+}
+
+func (m Model) handleRecipeDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q", "left", "h":
+		m.state = StateRecipeList
+		return m, nil
+	case "j", "down":
+		if m.recipeDetailScroll < len(m.recipeDetailLines)-1 {
+			m.recipeDetailScroll++
+		}
+	case "k", "up":
+		if m.recipeDetailScroll > 0 {
+			m.recipeDetailScroll--
+		}
+	}
+	return m, nil
+}
+
 // recipeScore returns a sort key: 0=fulfillable, 1=fulfillable with shopping list,
 // 2=no fulfillment data, 3=not fulfillable.
 func recipeScore(f api.RecipeFulfillment, hasData bool) int {
@@ -953,6 +1029,17 @@ func (m Model) handleRecipeListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "k", "up":
 		if m.recipeListCursor > 0 {
 			m.recipeListCursor--
+		}
+	case "enter", "right", "l":
+		if m.recipeListLoaded && len(m.recipeList) > 0 {
+			r := m.recipeList[m.recipeListCursor]
+			m.state = StateRecipeDetail
+			m.recipeDetail = nil
+			m.recipeDetailLines = nil
+			m.recipeDetailLoaded = false
+			m.recipeDetailScroll = 0
+			m.recipeDetailSeq++
+			return m, m.loadRecipeDetail(r.ID)
 		}
 	case "r":
 		m.recipeListLoaded = false
@@ -2109,6 +2196,8 @@ func (m Model) renderInputLine() string {
 		return " " + ui.StyleHint.Render(locale.Active.HintTodayMealPlan)
 	case StateRecipeList:
 		return " " + ui.StyleHint.Render(locale.Active.HintRecipeList)
+	case StateRecipeDetail:
+		return " " + ui.StyleHint.Render(locale.Active.HintRecipeDetail)
 	case StateEditNotes:
 		return " " + ui.StyleHint.Render(locale.Active.HintEditNotes)
 	case StateExpiringDetail:
@@ -2190,6 +2279,8 @@ func (m Model) renderMainContent(width, bodyH int) string {
 		sections = append(sections, m.renderTodayMealPlanView())
 	case StateRecipeList:
 		sections = append(sections, m.renderRecipeListView(bodyH))
+	case StateRecipeDetail:
+		sections = append(sections, m.renderRecipeDetailView(bodyH))
 	case StateShoppingListPrompt:
 		if m.currentProduct != nil {
 			sections = append(sections, fmt.Sprintf(" %s %s",
@@ -2830,6 +2921,129 @@ func (m Model) renderRecipeListView(bodyH int) string {
 	lines = append(lines, content[offset:end]...)
 
 	return strings.Join(lines, "\n")
+}
+
+func (m Model) renderRecipeDetailView(bodyH int) string {
+	var lines []string
+
+	if !m.recipeDetailLoaded {
+		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.Loading))
+		return strings.Join(lines, "\n")
+	}
+	if m.recipeDetail == nil {
+		return ""
+	}
+
+	name := m.recipeDetail.Name
+	if name == "" {
+		name = fmt.Sprintf(locale.Active.FmtRecipeID, m.recipeDetail.ID)
+	}
+	lines = append(lines, " "+ui.StyleBold.Render(name))
+	lines = append(lines, "")
+
+	if len(m.recipeDetailLines) == 0 {
+		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.NoRecipeDescription))
+		return strings.Join(lines, "\n")
+	}
+
+	descLines := m.recipeDetailLines
+
+	headerLines := len(lines)
+	maxVisible := bodyH - headerLines
+	if maxVisible < 1 {
+		maxVisible = 1
+	}
+
+	offset := m.recipeDetailScroll
+	maxOffset := len(descLines) - maxVisible
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if offset > maxOffset {
+		offset = maxOffset
+	}
+	end := offset + maxVisible
+	if end > len(descLines) {
+		end = len(descLines)
+	}
+
+	for _, l := range descLines[offset:end] {
+		lines = append(lines, " "+l)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// htmlToLines converts an HTML string to plain-text lines suitable for TUI display.
+// It handles common Grocy recipe description tags (paragraphs, lists, headers, breaks).
+func htmlToLines(src string) []string {
+	s := src
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+
+	// Number ordered list items before unordered processing replaces <li>
+	s = reOLBlock.ReplaceAllStringFunc(s, func(block string) string {
+		n := 0
+		return reLIOpen.ReplaceAllStringFunc(block, func(_ string) string {
+			n++
+			return fmt.Sprintf("\n%d. ", n)
+		})
+	})
+
+	// Remaining (unordered) list items → bullets
+	s = reLIOpen.ReplaceAllString(s, "\n• ")
+	s = reLIClose.ReplaceAllString(s, "")
+
+	// Headers → uppercase on their own line
+	for _, tag := range []string{"h1", "h2", "h3", "h4", "h5", "h6"} {
+		re := regexp.MustCompile(`(?is)<` + tag + `[^>]*>(.*?)</` + tag + `>`)
+		s = re.ReplaceAllStringFunc(s, func(match string) string {
+			sub := re.FindStringSubmatch(match)
+			if len(sub) > 1 {
+				inner := reStripTags.ReplaceAllString(sub[1], "")
+				return "\n\n" + strings.ToUpper(strings.TrimSpace(html.UnescapeString(inner))) + "\n"
+			}
+			return match
+		})
+	}
+
+	// Block elements and explicit breaks → newlines
+	s = rePClose.ReplaceAllString(s, "\n")
+	s = rePOpen.ReplaceAllString(s, "\n")
+	s = reBR.ReplaceAllString(s, "\n")
+	s = reBlockElem.ReplaceAllString(s, "\n")
+
+	// Strip all remaining tags
+	s = reStripTags.ReplaceAllString(s, "")
+
+	// Decode HTML entities (&amp; &lt; &nbsp; etc.)
+	s = html.UnescapeString(s)
+
+	rawLines := strings.Split(s, "\n")
+
+	var lines []string
+	prevBlank := false
+	for _, l := range rawLines {
+		l = strings.TrimRight(l, " \t")
+		if l == "" {
+			if !prevBlank {
+				lines = append(lines, "")
+			}
+			prevBlank = true
+		} else {
+			lines = append(lines, l)
+			prevBlank = false
+		}
+	}
+
+	for len(lines) > 0 && lines[0] == "" {
+		lines = lines[1:]
+	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	return lines
 }
 
 func (m Model) renderProductInfo() string {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -356,4 +357,90 @@ func TestDaysFromExpiry(t *testing.T) {
 			t.Errorf("expected ~30 days, got %d", *got)
 		}
 	})
+}
+
+// ---- htmlToLines ----
+
+func TestHTMLToLines(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		contains []string // each string must appear in some line
+		absent   []string // these strings must NOT appear in any line
+	}{
+		{
+			name:     "plain paragraph",
+			input:    "<p>Cook the pasta until al dente.</p>",
+			contains: []string{"Cook the pasta until al dente."},
+		},
+		{
+			name:     "strips HTML tags",
+			input:    "<p>Mix <strong>well</strong> before serving.</p>",
+			contains: []string{"well"},
+			absent:   []string{"<strong>", "</strong>"},
+		},
+		{
+			name:     "unordered list bullets",
+			input:    "<ul><li>Salt</li><li>Pepper</li></ul>",
+			contains: []string{"• Salt", "• Pepper"},
+		},
+		{
+			name:     "ordered list numbers",
+			input:    "<ol><li>Boil water</li><li>Add pasta</li></ol>",
+			contains: []string{"1. ", "2. "},
+		},
+		{
+			name:     "header uppercase",
+			input:    "<h2>Instructions</h2><p>Follow steps below.</p>",
+			contains: []string{"INSTRUCTIONS"},
+			absent:   []string{"<h2>"},
+		},
+		{
+			name:     "line break",
+			input:    "Line one<br>Line two",
+			contains: []string{"Line one", "Line two"},
+		},
+		{
+			name:     "html entity decoding",
+			input:    "<p>Salt &amp; pepper, &lt;to taste&gt;</p>",
+			contains: []string{"Salt & pepper, <to taste>"},
+			absent:   []string{"&amp;", "&lt;", "&gt;"},
+		},
+		{
+			name:     "empty input",
+			input:    "",
+			contains: nil,
+		},
+		{
+			name:     "no consecutive blank lines",
+			input:    "<p>A</p><p>B</p>",
+			contains: []string{"A", "B"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			lines := htmlToLines(tc.input)
+			joined := strings.Join(lines, "\n")
+
+			for _, want := range tc.contains {
+				found := false
+				for _, l := range lines {
+					if strings.Contains(l, want) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected %q in output; got:\n%s", want, joined)
+				}
+			}
+
+			for _, bad := range tc.absent {
+				if strings.Contains(joined, bad) {
+					t.Errorf("did not expect %q in output; got:\n%s", bad, joined)
+				}
+			}
+		})
+	}
 }
