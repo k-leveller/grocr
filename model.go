@@ -112,6 +112,7 @@ type Model struct {
 
 	// Consume quantity prompt
 	consumeQtyPrompt   bool // true when waiting for the user to enter a quantity
+	consumeSeq         int  // invalidates in-flight stock fetches when the user cancels
 	consumeQtyInput    textinput.Model
 	consumeProductID   int
 	consumeProductName string
@@ -177,6 +178,7 @@ type shoppingListMsg struct {
 }
 
 type consumeStockMsg struct {
+	seq         int
 	productID   int
 	productName string
 	spoiled     bool
@@ -418,6 +420,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case consumeStockMsg:
+		if msg.seq != m.consumeSeq {
+			return m, nil // stale result from a cancelled consume
+		}
 		m.consumeProductID = msg.productID
 		m.consumeProductName = msg.productName
 		m.consumeSpoiled = msg.spoiled
@@ -670,7 +675,8 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		if m.loading {
 			m.loading = false
-			m.lookupSeq++ // invalidate the in-flight lookup
+			m.lookupSeq++  // invalidate the in-flight lookup
+			m.consumeSeq++ // invalidate any in-flight consume stock fetch
 			m.currentUPC = ""
 			m.statusMsg = locale.Active.Cancelled
 			m.statusErr = false
@@ -760,7 +766,8 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.currentProduct = product
 			m.loading = true
 			m.statusMsg = ""
-			return m, m.loadConsumeStock(item.ProductID, item.ProductName, false)
+			m.consumeSeq++
+			return m, m.loadConsumeStock(m.consumeSeq, item.ProductID, item.ProductName, false)
 		}
 	case "d":
 		if !m.loading && m.input.Value() == "" && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
@@ -775,7 +782,8 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.currentProduct = product
 			m.loading = true
 			m.statusMsg = ""
-			return m, m.loadConsumeStock(item.ProductID, item.ProductName, true)
+			m.consumeSeq++
+			return m, m.loadConsumeStock(m.consumeSeq, item.ProductID, item.ProductName, true)
 		}
 	case "right", "l":
 		if m.input.Value() == "" && m.width >= expPanelMinWidth && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
@@ -914,7 +922,8 @@ func (m Model) handleLookupResult(msg lookupResultMsg) (tea.Model, tea.Cmd) {
 		m.state = StateConsume
 		m.consumeQtyPrompt = false
 		m.consumeProductName = msg.product.Name
-		return m, m.loadConsumeStock(msg.product.ID, msg.product.Name, false)
+		m.consumeSeq++
+		return m, m.loadConsumeStock(m.consumeSeq, msg.product.ID, msg.product.Name, false)
 	}
 
 	if m.mode == "lookup" {
@@ -1165,7 +1174,7 @@ func (m Model) loadPriceHistory() tea.Cmd {
 // loadConsumeStock fetches the stock level for a product about to be consumed.
 // The resulting consumeStockMsg decides whether to consume immediately or
 // prompt the user for a quantity.
-func (m Model) loadConsumeStock(productID int, productName string, spoiled bool) tea.Cmd {
+func (m Model) loadConsumeStock(seq, productID int, productName string, spoiled bool) tea.Cmd {
 	return func() tea.Msg {
 		if m.testMode {
 			return actionResultMsg{err: fmt.Errorf("%s", locale.Active.ErrCannotConsumeTestMode)}
@@ -1177,7 +1186,7 @@ func (m Model) loadConsumeStock(productID int, productName string, spoiled bool)
 		if info.StockAmount <= 0 {
 			return actionResultMsg{err: fmt.Errorf(locale.Active.ErrNoStockFor, productName)}
 		}
-		return consumeStockMsg{productID: productID, productName: productName, spoiled: spoiled, info: info}
+		return consumeStockMsg{seq: seq, productID: productID, productName: productName, spoiled: spoiled, info: info}
 	}
 }
 
@@ -1512,6 +1521,7 @@ func (m Model) handleConsumeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if key == "esc" {
 		m.state = StateIdle
 		m.consumeQtyPrompt = false
+		m.consumeSeq++ // invalidate any in-flight stock fetch
 		m.currentProduct = nil
 		m.input.SetValue("")
 		return m, m.input.Focus()
@@ -1591,7 +1601,8 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.state = StateConsume
 			m.consumeQtyPrompt = false
 			m.consumeProductName = m.currentProduct.Name
-			return m, m.loadConsumeStock(m.currentProduct.ID, m.currentProduct.Name, false)
+			m.consumeSeq++
+			return m, m.loadConsumeStock(m.consumeSeq, m.currentProduct.ID, m.currentProduct.Name, false)
 		}
 
 		if m.mode == "lookup" {

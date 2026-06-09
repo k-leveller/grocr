@@ -34,7 +34,6 @@ type Strings struct {
 	ErrProductNotFoundConsume string
 	ErrInvalidUPC           string // %s = raw input value
 	ErrCannotConsumeTestMode string
-	ErrNoStock              string
 	ErrNoStockFor           string // %s = product name
 	ErrSameLocation         string
 
@@ -220,7 +219,6 @@ var English = Strings{
 	ErrProductNotFoundConsume: "Product not found in Grocy — cannot consume",
 	ErrInvalidUPC:             "Invalid UPC: %s",
 	ErrCannotConsumeTestMode:  "cannot consume in test mode",
-	ErrNoStock:                "no stock on hand",
 	ErrNoStockFor:             "no stock on hand for %s",
 	ErrSameLocation:           "from and to locations must differ",
 
