@@ -185,7 +185,7 @@ type Strings struct {
 // English is the built-in English locale.
 var English = Strings{
 	// Input bar
-	InputPlaceholder:  "Scan UPC or type command...",
+	InputPlaceholder:  "Scan or enter UPC...",
 	SearchPlaceholder: "type to search...",
 
 	// General status
