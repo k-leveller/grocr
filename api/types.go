@@ -92,6 +92,7 @@ type Recipe struct {
 	Name         string `json:"name"`
 	Description  string `json:"description"`
 	BaseServings int    `json:"base_servings"`
+	Type         string `json:"type"`
 }
 
 type RecipeFulfillment struct {

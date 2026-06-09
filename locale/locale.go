@@ -242,7 +242,7 @@ var English = Strings{
 	HintPriceHistory:   "↑/↓/j/k = navigate  •  Esc/p = back",
 	HintMealPlan:       "↑/↓/j/k = scroll  •  r = refresh  •  Esc/q = back",
 	HintTodayMealPlan:  "r = refresh  •  Esc/q = back",
-	HintRecipeList:     "↑/↓/j/k = navigate  •  Enter/→ = view  •  r = refresh  •  Esc/q = back",
+	HintRecipeList:     "↑/↓/j/k = navigate  •  / = search  •  Enter/→ = view  •  r = refresh  •  Esc/q = back",
 	HintRecipeDetail:   "↑/↓/j/k = scroll  •  ←/h/q/Esc = back",
 	HintEditNotes:      "Enter to save  •  Esc to cancel",
 	HintYesNo:          "y = yes, any other key = no",

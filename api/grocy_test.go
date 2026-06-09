@@ -525,7 +525,10 @@ func TestCreateStore(t *testing.T) {
 
 func TestGetRecipes(t *testing.T) {
 	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, []Recipe{{ID: 1, Name: "Pasta Bolognese"}, {ID: 2, Name: "Caesar Salad"}})
+		writeJSON(w, []Recipe{
+			{ID: 1, Name: "Pasta Bolognese", Type: "normal"},
+			{ID: 2, Name: "Caesar Salad", Type: ""},
+		})
 	})
 	recipes, err := client.GetRecipes()
 	if err != nil {
@@ -533,6 +536,9 @@ func TestGetRecipes(t *testing.T) {
 	}
 	if len(recipes) != 2 {
 		t.Errorf("len = %d, want 2", len(recipes))
+	}
+	if recipes[0].Type != "normal" {
+		t.Errorf("Type = %q, want %q", recipes[0].Type, "normal")
 	}
 }
 
