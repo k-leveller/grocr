@@ -230,7 +230,7 @@ var English = Strings{
 	ModeAdd:     "[ADD]",
 	ModeConsume: "[EAT]",
 	ModeLookup:  "[LOOK]",
-	HeaderHints: "q:quit m:mode /:search ^N:new ?:help",
+	HeaderHints: "q:quit m:mode /:search n:new ?:help",
 
 	// Input line hints
 	HintLookupView:     "n = notes  •  p = price history  •  t = transfer  •  Esc/Enter = dismiss",
