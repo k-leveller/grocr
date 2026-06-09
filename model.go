@@ -319,6 +319,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case stockAmountsLoadedMsg:
 		m.stockAmounts = msg.amounts
+		if m.state == StateSearch {
+			m.search.StockAmounts = msg.amounts
+			m.search.UpdateFilter()
+		}
 		return m, nil
 
 	case expiringSoonMsg:
@@ -402,7 +406,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.SetValue("")
 		cmds := []tea.Cmd{m.input.Focus()}
 		if msg.err == nil {
-			cmds = append(cmds, m.loadExpiringSoon())
+			cmds = append(cmds, m.loadExpiringSoon(), m.loadStockAmounts())
 		}
 		return m, tea.Batch(cmds...)
 
