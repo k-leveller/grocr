@@ -6,11 +6,11 @@ A terminal UI for scanning barcodes into [Grocy](https://grocy.info/) inventory.
 
 **Add product form** — after a barcode scan, fill in expiry, location, quantity, and price:
 
-![Add product form](docs/grocr-1.png)
+![Terminal form showing product name, expiry date, location, quantity, and price fields](docs/grocr-1.png)
 
 **Product search** — press `/` to find products by name:
 
-![Product search](docs/grocr-2.png)
+![Terminal search results listing products with stock quantity and location](docs/grocr-2.png)
 
 ## Compatibility
 
