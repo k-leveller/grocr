@@ -62,8 +62,9 @@ type Strings struct {
 	HintTodayMealPlan string
 	HintRecipeList    string
 	HintEditNotes     string
-	HintYesNo         string
+	HintYesNo          string
 	HintUnknownBarcode string
+	HintExpiringDetail string
 
 	// ── Form ───────────────────────────────────────────────────────────────────
 	FormNavHint         string // navigation hint shown below every form
@@ -89,8 +90,9 @@ type Strings struct {
 	SearchNavHint string
 
 	// ── Expiring soon panel ────────────────────────────────────────────────────
-	ExpiringSoonHeader string
-	NoneExpiringSoon   string
+	ExpiringSoonHeader   string
+	NoneExpiringSoon     string
+	ExpiringDetailHeader string
 
 	// ── Product info labels ────────────────────────────────────────────────────
 	LabelUPC        string
@@ -98,6 +100,7 @@ type Strings struct {
 	LabelInStock    string
 	LabelShelfLife  string
 	LabelLocation   string
+	LabelExpires    string
 	LabelStore      string
 	LabelLastPrice  string
 	LabelNotes      string
@@ -239,6 +242,7 @@ var English = Strings{
 	HintEditNotes:      "Enter to save  •  Esc to cancel",
 	HintYesNo:          "y = yes, any other key = no",
 	HintUnknownBarcode: "C/Enter = create new  •  L = link existing  •  Esc = cancel",
+	HintExpiringDetail: "← / Esc = back  •  j/k = navigate",
 
 	// Form
 	FormNavHint:         "Tab/↓ to navigate fields, Enter to submit, Esc to cancel",
@@ -264,8 +268,9 @@ var English = Strings{
 	SearchNavHint: "↑/↓ navigate · Tab filter location · Enter select · n new · Esc cancel",
 
 	// Expiring soon panel
-	ExpiringSoonHeader: "Expiring Soon",
-	NoneExpiringSoon:   "None expiring soon",
+	ExpiringSoonHeader:   "Expiring Soon",
+	NoneExpiringSoon:     "None expiring soon",
+	ExpiringDetailHeader: "Item Details",
 
 	// Product info labels
 	LabelUPC:         "UPC:",
@@ -273,6 +278,7 @@ var English = Strings{
 	LabelInStock:     "In stock:",
 	LabelShelfLife:   "Shelf life:",
 	LabelLocation:    "Location:",
+	LabelExpires:     "Expires:",
 	LabelStore:       "Store:",
 	LabelLastPrice:   "Last price:",
 	LabelNotes:       "Notes:",
@@ -363,6 +369,7 @@ var English = Strings{
 		"  ↓/j     Newer UPC history entry (or expiry panel down)\n" +
 		"  c       Mark as consumed (expiring-soon panel)\n" +
 		"  d       Mark as spoiled (expiring-soon panel)\n" +
+		"  →/l     Open item details (expiring-soon panel)\n" +
 		"  Tab/↓   Next field (form)\n" +
 		"  S-Tab/↑ Previous field (form)\n" +
 		"  Enter   Submit form\n" +
