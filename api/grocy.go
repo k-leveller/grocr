@@ -505,6 +505,18 @@ func (c *GrocyClient) GetRecipes() ([]Recipe, error) {
 	return recipes, nil
 }
 
+func (c *GrocyClient) GetRecipe(id int) (*Recipe, error) {
+	data, err := c.request("GET", fmt.Sprintf("/objects/recipes/%d", id), nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var r Recipe
+	if err := json.Unmarshal(data, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
 func (c *GrocyClient) GetRecipeFulfillment(id int) (*RecipeFulfillment, error) {
 	data, err := c.request("GET", fmt.Sprintf("/recipes/%d/fulfillment", id), nil, nil)
 	if err != nil {

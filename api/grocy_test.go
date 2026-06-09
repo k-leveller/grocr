@@ -536,6 +536,37 @@ func TestGetRecipes(t *testing.T) {
 	}
 }
 
+func TestGetRecipe(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, Recipe{ID: 7, Name: "Pasta Bolognese", Description: "<p>Cook pasta.</p>", BaseServings: 4})
+		})
+		r, err := client.GetRecipe(7)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.ID != 7 || r.Name != "Pasta Bolognese" {
+			t.Errorf("unexpected recipe: %+v", r)
+		}
+		if r.Description == "" {
+			t.Error("expected non-empty description")
+		}
+		if r.BaseServings != 4 {
+			t.Errorf("BaseServings = %d, want 4", r.BaseServings)
+		}
+	})
+
+	t.Run("HTTP error", func(t *testing.T) {
+		client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "not found", http.StatusNotFound)
+		})
+		_, err := client.GetRecipe(99)
+		if err == nil {
+			t.Error("expected error for 404, got nil")
+		}
+	})
+}
+
 func TestGetRecipeFulfillment(t *testing.T) {
 	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, RecipeFulfillment{RecipeID: 1, NeedFulfilled: true})
