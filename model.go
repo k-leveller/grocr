@@ -689,7 +689,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.consumeFromPanel(item, product, true)
 		}
 	case "right", "l":
-		if m.input.Value() == "" && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
+		if m.input.Value() == "" && m.width >= expPanelMinWidth && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
 			m.state = StateExpiringDetail
 			m.input.Blur()
 			return m, nil
@@ -1008,14 +1008,14 @@ func (m Model) loadStockForConsume() tea.Cmd {
 func (m Model) consumeFromPanel(item api.ExpiringItem, product *api.Product, spoiled bool) tea.Cmd {
 	return func() tea.Msg {
 		if m.testMode {
-			return actionResultMsg{err: fmt.Errorf("cannot consume in test mode")}
+			return actionResultMsg{err: fmt.Errorf("%s", locale.Active.ErrCannotConsumeTestMode)}
 		}
 		info, err := m.grocy.GetStock(item.ProductID)
 		if err != nil {
 			return actionResultMsg{err: err}
 		}
 		if info.StockAmount <= 0 {
-			return actionResultMsg{err: fmt.Errorf("%s", fmt.Sprintf(locale.Active.ErrNoStockFor, item.ProductName))}
+			return actionResultMsg{err: fmt.Errorf(locale.Active.ErrNoStockFor, item.ProductName)}
 		}
 		err = m.grocy.ConsumeStock(item.ProductID, 1, spoiled)
 		action := "consume"
@@ -2167,7 +2167,7 @@ func (m Model) renderMainContent(width, bodyH int) string {
 		sections = append(sections, m.renderLookupView())
 		sections = append(sections, "")
 		sections = append(sections, " "+ui.StyleBold.Render(locale.Active.NotesLabel)+m.editInput.View())
-		sections = append(sections, " "+ui.StyleHint.Render(locale.Active.EditNameHint))
+		sections = append(sections, " "+ui.StyleHint.Render(locale.Active.HintEditNotes))
 	case StateConsume:
 		if m.currentProduct != nil {
 			sections = append(sections, fmt.Sprintf(" %s %s", ui.StyleBold.Render(locale.Active.ConsumingLabel), m.currentProduct.Name))
