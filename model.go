@@ -110,6 +110,14 @@ type Model struct {
 	priceHistory       []api.StockTransaction
 	priceHistoryCursor int
 
+	// Consume quantity prompt
+	consumeQtyPrompt   bool // true when waiting for the user to enter a quantity
+	consumeQtyInput    textinput.Model
+	consumeProductID   int
+	consumeProductName string
+	consumeSpoiled     bool
+	consumeStockAmount float64
+
 	// Status message
 	statusMsg string
 	statusErr bool
@@ -166,6 +174,13 @@ type actionResultMsg struct {
 type shoppingListMsg struct {
 	productName string
 	err         error
+}
+
+type consumeStockMsg struct {
+	productID   int
+	productName string
+	spoiled     bool
+	info        *api.StockInfo
 }
 
 type stockInfoMsg struct {
@@ -402,8 +417,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case consumeStockMsg:
+		m.consumeProductID = msg.productID
+		m.consumeProductName = msg.productName
+		m.consumeSpoiled = msg.spoiled
+		m.consumeStockAmount = msg.info.StockAmount
+		if msg.info.StockAmount <= 1 {
+			// Only one (or a partial unit) in stock — consume it without prompting.
+			qty := math.Min(1, msg.info.StockAmount)
+			return m, m.doConsume(msg.productID, msg.productName, qty, msg.spoiled, msg.info.StockAmount)
+		}
+		m.loading = false
+		m.state = StateConsume
+		m.consumeQtyPrompt = true
+		ti := textinput.New()
+		ti.SetValue("1")
+		ti.CursorEnd()
+		ti.Focus()
+		ti.CharLimit = 10
+		ti.Width = 10
+		m.consumeQtyInput = ti
+		m.statusMsg = ""
+		m.statusErr = false
+		m.input.Blur()
+		return m, nil
+
 	case actionResultMsg:
 		m.loading = false
+		m.consumeQtyPrompt = false
 		if msg.err != nil {
 			logger.LogError("action error: " + msg.err.Error())
 			m.statusMsg = fmt.Sprintf(locale.Active.ErrAction, msg.err.Error())
@@ -719,7 +760,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.currentProduct = product
 			m.loading = true
 			m.statusMsg = ""
-			return m, m.consumeFromPanel(item, product, false)
+			return m, m.loadConsumeStock(item.ProductID, item.ProductName, false)
 		}
 	case "d":
 		if !m.loading && m.input.Value() == "" && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
@@ -734,7 +775,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.currentProduct = product
 			m.loading = true
 			m.statusMsg = ""
-			return m, m.consumeFromPanel(item, product, true)
+			return m, m.loadConsumeStock(item.ProductID, item.ProductName, true)
 		}
 	case "right", "l":
 		if m.input.Value() == "" && m.width >= expPanelMinWidth && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
@@ -871,7 +912,9 @@ func (m Model) handleLookupResult(msg lookupResultMsg) (tea.Model, tea.Cmd) {
 		}
 		// Load stock info
 		m.state = StateConsume
-		return m, m.loadStockForConsume()
+		m.consumeQtyPrompt = false
+		m.consumeProductName = msg.product.Name
+		return m, m.loadConsumeStock(msg.product.ID, msg.product.Name, false)
 	}
 
 	if m.mode == "lookup" {
@@ -1119,58 +1162,40 @@ func (m Model) loadPriceHistory() tea.Cmd {
 	}
 }
 
-func (m Model) loadStockForConsume() tea.Cmd {
-	return func() tea.Msg {
-		if m.testMode || m.currentProduct == nil {
-			return actionResultMsg{err: fmt.Errorf("%s", locale.Active.ErrCannotConsumeTestMode)}
-		}
-		info, err := m.grocy.GetStock(m.currentProduct.ID)
-		if err != nil {
-			return actionResultMsg{err: err}
-		}
-		// We store it and let the view handle prompting for quantity
-		// For now, consume 1
-		if info.StockAmount <= 0 {
-			return actionResultMsg{err: fmt.Errorf("%s", locale.Active.ErrNoStock)}
-		}
-		err = m.grocy.ConsumeStock(m.currentProduct.ID, 1, false)
-		entry := ui.LogEntry{
-			ProductName: m.currentProduct.Name,
-			Quantity:    1,
-			Action:      "consume",
-			Success:     err == nil,
-			Time:        time.Now(),
-		}
-		zeroedStock := err == nil && info.StockAmount-1 <= 0
-		return actionResultMsg{entry: entry, err: err, zeroedStock: zeroedStock}
-	}
-}
-
-func (m Model) consumeFromPanel(item api.ExpiringItem, product *api.Product, spoiled bool) tea.Cmd {
+// loadConsumeStock fetches the stock level for a product about to be consumed.
+// The resulting consumeStockMsg decides whether to consume immediately or
+// prompt the user for a quantity.
+func (m Model) loadConsumeStock(productID int, productName string, spoiled bool) tea.Cmd {
 	return func() tea.Msg {
 		if m.testMode {
 			return actionResultMsg{err: fmt.Errorf("%s", locale.Active.ErrCannotConsumeTestMode)}
 		}
-		info, err := m.grocy.GetStock(item.ProductID)
+		info, err := m.grocy.GetStock(productID)
 		if err != nil {
 			return actionResultMsg{err: err}
 		}
 		if info.StockAmount <= 0 {
-			return actionResultMsg{err: fmt.Errorf(locale.Active.ErrNoStockFor, item.ProductName)}
+			return actionResultMsg{err: fmt.Errorf(locale.Active.ErrNoStockFor, productName)}
 		}
-		err = m.grocy.ConsumeStock(item.ProductID, 1, spoiled)
+		return consumeStockMsg{productID: productID, productName: productName, spoiled: spoiled, info: info}
+	}
+}
+
+func (m Model) doConsume(productID int, productName string, qty float64, spoiled bool, stockAmount float64) tea.Cmd {
+	return func() tea.Msg {
+		err := m.grocy.ConsumeStock(productID, qty, spoiled)
 		action := "consume"
 		if spoiled {
 			action = "spoiled"
 		}
 		entry := ui.LogEntry{
-			ProductName: item.ProductName,
-			Quantity:    1,
+			ProductName: productName,
+			Quantity:    qty,
 			Action:      action,
 			Success:     err == nil,
 			Time:        time.Now(),
 		}
-		zeroedStock := err == nil && info.StockAmount-1 <= 0
+		zeroedStock := err == nil && stockAmount-qty <= 0
 		return actionResultMsg{entry: entry, err: err, zeroedStock: zeroedStock}
 	}
 }
@@ -1486,10 +1511,46 @@ func (m Model) handleConsumeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	if key == "esc" {
 		m.state = StateIdle
+		m.consumeQtyPrompt = false
+		m.currentProduct = nil
 		m.input.SetValue("")
 		return m, m.input.Focus()
 	}
-	return m, nil
+
+	if !m.consumeQtyPrompt || m.loading {
+		return m, nil
+	}
+
+	if key == "enter" {
+		qty, err := parseConsumeQty(m.consumeQtyInput.Value(), m.consumeStockAmount)
+		if err != nil {
+			m.statusMsg = err.Error()
+			m.statusErr = true
+			return m, nil
+		}
+		m.statusMsg = ""
+		m.statusErr = false
+		m.consumeQtyPrompt = false
+		m.loading = true
+		return m, m.doConsume(m.consumeProductID, m.consumeProductName, qty, m.consumeSpoiled, m.consumeStockAmount)
+	}
+
+	var cmd tea.Cmd
+	m.consumeQtyInput, cmd = m.consumeQtyInput.Update(msg)
+	return m, cmd
+}
+
+// parseConsumeQty parses a consume-quantity input, requiring 0 < qty <= stock.
+func parseConsumeQty(val string, stock float64) (float64, error) {
+	val = strings.TrimSpace(val)
+	n, err := strconv.ParseFloat(val, 64)
+	if err != nil || math.IsNaN(n) || math.IsInf(n, 0) || n <= 0 {
+		return 0, fmt.Errorf(locale.Active.ErrInvalidQty, val)
+	}
+	if n > stock {
+		return 0, fmt.Errorf(locale.Active.FmtQtyExceedsStock, stock)
+	}
+	return n, nil
 }
 
 func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -1528,7 +1589,9 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		if m.mode == "consume" {
 			m.state = StateConsume
-			return m, m.loadStockForConsume()
+			m.consumeQtyPrompt = false
+			m.consumeProductName = m.currentProduct.Name
+			return m, m.loadConsumeStock(m.currentProduct.ID, m.currentProduct.Name, false)
 		}
 
 		if m.mode == "lookup" {
@@ -2312,8 +2375,21 @@ func (m Model) renderMainContent(width, bodyH int) string {
 		sections = append(sections, " "+ui.StyleBold.Render(locale.Active.NotesLabel)+m.editInput.View())
 		sections = append(sections, " "+ui.StyleHint.Render(locale.Active.HintEditNotes))
 	case StateConsume:
-		if m.currentProduct != nil {
-			sections = append(sections, fmt.Sprintf(" %s %s", ui.StyleBold.Render(locale.Active.ConsumingLabel), m.currentProduct.Name))
+		name := m.consumeProductName
+		if name == "" && m.currentProduct != nil {
+			name = m.currentProduct.Name
+		}
+		if m.consumeQtyPrompt {
+			sections = append(sections, fmt.Sprintf(" %s %s", ui.StyleBold.Render(locale.Active.ConsumingLabel), name))
+			sections = append(sections, " "+ui.StyleInfo.Render(fmt.Sprintf(locale.Active.FmtInStock, m.consumeStockAmount)))
+			sections = append(sections, "")
+			sections = append(sections, " "+ui.StyleBold.Render(locale.Active.ConsumeQtyLabel)+m.consumeQtyInput.View())
+			sections = append(sections, " "+ui.StyleHint.Render(locale.Active.ConsumeQtyHint))
+			if m.statusMsg != "" && m.statusErr {
+				sections = append(sections, " "+ui.StyleError.Render(m.statusMsg))
+			}
+		} else if name != "" {
+			sections = append(sections, fmt.Sprintf(" %s %s", ui.StyleBold.Render(locale.Active.ConsumingLabel), name))
 			sections = append(sections, " "+ui.StyleHint.Render(locale.Active.Processing))
 		}
 	case StateSearch:

@@ -125,7 +125,12 @@ type Strings struct {
 	NotesLabel    string
 
 	// ── Consume ───────────────────────────────────────────────────────────────
-	ConsumingLabel string
+	ConsumingLabel     string
+	ConsumeQtyLabel    string
+	ConsumeQtyHint     string
+	FmtInStock         string // %g = stock amount
+	ErrInvalidQty      string // %s = entered value
+	FmtQtyExceedsStock string // %g = stock amount
 
 	// ── Transfer ──────────────────────────────────────────────────────────────
 	TransferStockHeader string
@@ -306,7 +311,12 @@ var English = Strings{
 	NotesLabel:    "Notes: ",
 
 	// Consume
-	ConsumingLabel: "Consuming:",
+	ConsumingLabel:     "Consuming:",
+	ConsumeQtyLabel:    "Quantity to consume: ",
+	ConsumeQtyHint:     "Enter to confirm, Esc to cancel",
+	FmtInStock:         "%g in stock",
+	ErrInvalidQty:      "invalid quantity: %s",
+	FmtQtyExceedsStock: "only %g in stock",
 
 	// Transfer
 	TransferStockHeader: "Transfer stock",

@@ -187,6 +187,45 @@ func TestParseQuantity(t *testing.T) {
 	}
 }
 
+func TestParseConsumeQty(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		stock   float64
+		want    float64
+		wantErr bool
+	}{
+		{name: "simple", input: "1", stock: 3, want: 1},
+		{name: "full stock", input: "3", stock: 3, want: 3},
+		{name: "fractional", input: "1.5", stock: 3, want: 1.5},
+		{name: "whitespace", input: "  2  ", stock: 3, want: 2},
+		{name: "exceeds stock", input: "4", stock: 3, wantErr: true},
+		{name: "zero", input: "0", stock: 3, wantErr: true},
+		{name: "negative", input: "-1", stock: 3, wantErr: true},
+		{name: "empty", input: "", stock: 3, wantErr: true},
+		{name: "non-numeric", input: "abc", stock: 3, wantErr: true},
+		{name: "infinity", input: "Inf", stock: 3, wantErr: true},
+		{name: "nan", input: "NaN", stock: 3, wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseConsumeQty(tc.input, tc.stock)
+			if tc.wantErr {
+				if err == nil {
+					t.Errorf("parseConsumeQty(%q, %v) expected error, got %v", tc.input, tc.stock, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseConsumeQty(%q, %v) unexpected error: %v", tc.input, tc.stock, err)
+			}
+			if got != tc.want {
+				t.Errorf("parseConsumeQty(%q, %v) = %v, want %v", tc.input, tc.stock, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestParsePrice(t *testing.T) {
 	m := newTestModel()
 	tests := []struct {
