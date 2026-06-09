@@ -44,6 +44,7 @@ const (
 	StateUnknownBarcode
 	StateRecipeList
 	StateTodayMealPlan
+	StateExpiringDetail
 )
 
 type Model struct {
@@ -566,6 +567,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleUnknownBarcodeKey(msg)
 	case StateRecipeList:
 		return m.handleRecipeListKey(msg)
+	case StateExpiringDetail:
+		return m.handleExpiringDetailKey(msg)
 	}
 
 	return m, nil
@@ -685,6 +688,12 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = ""
 			return m, m.consumeFromPanel(item, product, true)
 		}
+	case "right", "l":
+		if m.input.Value() == "" && m.width >= expPanelMinWidth && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
+			m.state = StateExpiringDetail
+			m.input.Blur()
+			return m, nil
+		}
 	case "m":
 		if m.input.Value() == "" {
 			switch m.mode {
@@ -779,6 +788,23 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 	return m, cmd
+}
+
+func (m Model) handleExpiringDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "left", "h":
+		m.state = StateIdle
+		return m, m.input.Focus()
+	case "j", "down":
+		if m.expPanelCursor < len(m.expiringSoon)-1 {
+			m.expPanelCursor++
+		}
+	case "k", "up":
+		if m.expPanelCursor > 0 {
+			m.expPanelCursor--
+		}
+	}
+	return m, nil
 }
 
 func (m Model) handleLookupResult(msg lookupResultMsg) (tea.Model, tea.Cmd) {
@@ -982,14 +1008,14 @@ func (m Model) loadStockForConsume() tea.Cmd {
 func (m Model) consumeFromPanel(item api.ExpiringItem, product *api.Product, spoiled bool) tea.Cmd {
 	return func() tea.Msg {
 		if m.testMode {
-			return actionResultMsg{err: fmt.Errorf("cannot consume in test mode")}
+			return actionResultMsg{err: fmt.Errorf("%s", locale.Active.ErrCannotConsumeTestMode)}
 		}
 		info, err := m.grocy.GetStock(item.ProductID)
 		if err != nil {
 			return actionResultMsg{err: err}
 		}
 		if info.StockAmount <= 0 {
-			return actionResultMsg{err: fmt.Errorf("%s", fmt.Sprintf(locale.Active.ErrNoStockFor, item.ProductName))}
+			return actionResultMsg{err: fmt.Errorf(locale.Active.ErrNoStockFor, item.ProductName)}
 		}
 		err = m.grocy.ConsumeStock(item.ProductID, 1, spoiled)
 		action := "consume"
@@ -2085,6 +2111,8 @@ func (m Model) renderInputLine() string {
 		return " " + ui.StyleHint.Render(locale.Active.HintRecipeList)
 	case StateEditNotes:
 		return " " + ui.StyleHint.Render(locale.Active.HintEditNotes)
+	case StateExpiringDetail:
+		return " " + ui.StyleHint.Render(locale.Active.HintExpiringDetail)
 	case StateShoppingListPrompt:
 		return " " + ui.StyleHint.Render(locale.Active.HintYesNo)
 	case StateUnknownBarcode:
@@ -2139,7 +2167,7 @@ func (m Model) renderMainContent(width, bodyH int) string {
 		sections = append(sections, m.renderLookupView())
 		sections = append(sections, "")
 		sections = append(sections, " "+ui.StyleBold.Render(locale.Active.NotesLabel)+m.editInput.View())
-		sections = append(sections, " "+ui.StyleHint.Render(locale.Active.EditNameHint))
+		sections = append(sections, " "+ui.StyleHint.Render(locale.Active.HintEditNotes))
 	case StateConsume:
 		if m.currentProduct != nil {
 			sections = append(sections, fmt.Sprintf(" %s %s", ui.StyleBold.Render(locale.Active.ConsumingLabel), m.currentProduct.Name))
@@ -2182,7 +2210,71 @@ func (m Model) renderMainContent(width, bodyH int) string {
 	return strings.Join(sections, "\n")
 }
 
+func (m Model) renderExpiringDetailPanel() string {
+	var lines []string
+	lines = append(lines, " "+ui.StyleBold.Render(locale.Active.ExpiringDetailHeader))
+	lines = append(lines, " "+ui.StyleSeparator.Render(strings.Repeat("─", expPanelWidth-2)))
+
+	if m.expPanelCursor < 0 || m.expPanelCursor >= len(m.expiringSoon) {
+		return strings.Join(lines, "\n")
+	}
+
+	item := m.expiringSoon[m.expPanelCursor]
+
+	name := item.ProductName
+	if item.ProductShortName != "" {
+		name = item.ProductShortName
+	}
+	nameColW := expPanelWidth - 2
+	runes := []rune(name)
+	if len(runes) > nameColW {
+		name = string(runes[:nameColW-1]) + "…"
+	}
+	lines = append(lines, " "+ui.StyleBold.Render(name))
+	lines = append(lines, "")
+
+	qty := m.stockAmounts[item.ProductID]
+	qtyStr := fmt.Sprintf("%g", qty)
+
+	var product *api.Product
+	for i := range m.allProducts {
+		if m.allProducts[i].ID == item.ProductID {
+			product = &m.allProducts[i]
+			break
+		}
+	}
+	if product != nil && m.defaults != nil {
+		for _, u := range m.defaults.QuantityUnits {
+			if u.ID == product.QuIDStock {
+				qtyStr += " " + u.Name
+				break
+			}
+		}
+	}
+	lines = append(lines, fmt.Sprintf(" %s %s",
+		ui.StyleLabel.Render(locale.Active.LabelInStock), qtyStr))
+
+	if product != nil && m.defaults != nil {
+		for _, loc := range m.defaults.Locations {
+			if loc.ID == product.LocationID {
+				lines = append(lines, fmt.Sprintf(" %s %s",
+					ui.StyleLabel.Render(locale.Active.LabelLocation), loc.Name))
+				break
+			}
+		}
+	}
+
+	lines = append(lines, fmt.Sprintf(" %s %s",
+		ui.StyleLabel.Render(locale.Active.LabelExpires), item.BestBeforeDate))
+
+	return strings.Join(lines, "\n")
+}
+
 func (m Model) renderExpiringSoonPanel(bodyH int) string {
+	if m.state == StateExpiringDetail {
+		return m.renderExpiringDetailPanel()
+	}
+
 	const daysColW = 3
 	nameColW := expPanelWidth - 2 - daysColW // 1 for " " prefix, 1 for " " before days
 
