@@ -427,16 +427,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.consumeProductName = msg.productName
 		m.consumeSpoiled = msg.spoiled
 		m.consumeStockAmount = msg.info.StockAmount
-		if msg.info.StockAmount <= 1 {
-			// Only one (or a partial unit) in stock — consume it without prompting.
-			qty := math.Min(1, msg.info.StockAmount)
-			return m, m.doConsume(msg.productID, msg.productName, qty, msg.spoiled, msg.info.StockAmount)
-		}
 		m.loading = false
 		m.state = StateConsume
 		m.consumeQtyPrompt = true
 		ti := textinput.New()
-		ti.SetValue("1")
+		// Default to 1, clamped to the on-hand amount so the default is always valid.
+		ti.SetValue(strconv.FormatFloat(math.Min(1, msg.info.StockAmount), 'f', -1, 64))
 		ti.CursorEnd()
 		ti.Focus()
 		ti.CharLimit = 10
@@ -812,7 +808,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				locs = m.defaults.Locations
 				units = m.defaults.QuantityUnits
 			}
-			m.search = ui.NewSearch(m.allProducts, locs, units, m.stockAmounts, m.mode == "lookup")
+			m.search = ui.NewSearch(m.allProducts, locs, units, m.stockAmounts, m.mode == "lookup" || m.mode == "consume")
 			m.input.Blur()
 			return m, nil
 		}
