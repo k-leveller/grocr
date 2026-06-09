@@ -133,11 +133,13 @@ type Model struct {
 	linkBarcode bool
 
 	// Recipe list
-	recipeList        []api.Recipe
-	recipeFulfillment map[int]api.RecipeFulfillment
-	recipeListLoaded  bool
-	recipeListCursor  int
-	recipeListSeq     int
+	recipeList          []api.Recipe
+	recipeFulfillment   map[int]api.RecipeFulfillment
+	recipeListLoaded    bool
+	recipeListCursor    int
+	recipeListSeq       int
+	recipeFilter        string
+	recipeFilterActive  bool
 
 	// Recipe detail
 	recipeDetail       *api.Recipe
@@ -784,6 +786,8 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.recipeFulfillment = nil
 			m.recipeListCursor = 0
 			m.recipeListSeq++
+			m.recipeFilter = ""
+			m.recipeFilterActive = false
 			m.input.Blur()
 			return m, m.loadRecipeList()
 		}
@@ -955,9 +959,15 @@ func (m Model) loadRecipeList() tea.Cmd {
 		if m.testMode {
 			return recipeListMsg{seq: seq, recipes: []api.Recipe{}, fulfillment: map[int]api.RecipeFulfillment{}}
 		}
-		recipes, err := m.grocy.GetRecipes()
+		all, err := m.grocy.GetRecipes()
 		if err != nil {
 			return recipeListMsg{seq: seq, err: err}
+		}
+		var recipes []api.Recipe
+		for _, r := range all {
+			if r.Type == "" || r.Type == "normal" {
+				recipes = append(recipes, r)
+			}
 		}
 		fulfillment := make(map[int]api.RecipeFulfillment, len(recipes))
 		for _, r := range recipes {
@@ -1016,14 +1026,42 @@ func recipeScore(f api.RecipeFulfillment, hasData bool) int {
 }
 
 func (m Model) handleRecipeListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.recipeFilterActive {
+		switch msg.String() {
+		case "esc":
+			m.recipeFilterActive = false
+			m.recipeFilter = ""
+			m.recipeListCursor = 0
+		case "enter":
+			m.recipeFilterActive = false
+		case "backspace", "ctrl+h":
+			runes := []rune(m.recipeFilter)
+			if len(runes) > 0 {
+				m.recipeFilter = string(runes[:len(runes)-1])
+				m.recipeListCursor = 0
+			}
+		default:
+			if len(msg.Runes) > 0 {
+				m.recipeFilter += string(msg.Runes)
+				m.recipeListCursor = 0
+			}
+		}
+		return m, nil
+	}
+
 	switch msg.String() {
 	case "esc", "q":
 		m.state = StateIdle
 		m.statusMsg = ""
 		m.statusErr = false
+		m.recipeFilter = ""
+		m.recipeFilterActive = false
 		return m, m.input.Focus()
+	case "/":
+		m.recipeFilterActive = true
 	case "j", "down":
-		if m.recipeListCursor < len(m.recipeList)-1 {
+		filtered := m.filteredRecipes()
+		if m.recipeListCursor < len(filtered)-1 {
 			m.recipeListCursor++
 		}
 	case "k", "up":
@@ -1046,10 +1084,26 @@ func (m Model) handleRecipeListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.recipeList = nil
 		m.recipeFulfillment = nil
 		m.recipeListCursor = 0
+		m.recipeFilter = ""
+		m.recipeFilterActive = false
 		m.recipeListSeq++
 		return m, m.loadRecipeList()
 	}
 	return m, nil
+}
+
+func (m Model) filteredRecipes() []api.Recipe {
+	if m.recipeFilter == "" {
+		return m.recipeList
+	}
+	filter := strings.ToLower(m.recipeFilter)
+	var out []api.Recipe
+	for _, r := range m.recipeList {
+		if strings.Contains(strings.ToLower(r.Name), filter) {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 func (m Model) loadPriceHistory() tea.Cmd {
@@ -2854,19 +2908,33 @@ func (m Model) renderTodayMealPlanView() string {
 func (m Model) renderRecipeListView(bodyH int) string {
 	var lines []string
 	lines = append(lines, " "+ui.StyleBold.Render(locale.Active.RecipesHeader))
+
+	// Filter bar
+	if m.recipeFilterActive {
+		cursor := "_"
+		lines = append(lines, "  /"+m.recipeFilter+cursor)
+	} else if m.recipeFilter != "" {
+		lines = append(lines, "  /"+ui.StyleWarning.Render(m.recipeFilter))
+	}
 	lines = append(lines, "")
 
 	if !m.recipeListLoaded {
 		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.Loading))
 		return strings.Join(lines, "\n")
 	}
-	if len(m.recipeList) == 0 {
-		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.NoRecipes))
+
+	filtered := m.filteredRecipes()
+	if len(filtered) == 0 {
+		if m.recipeFilter != "" {
+			lines = append(lines, " "+ui.StyleHint.Render(locale.Active.NoMatches))
+		} else {
+			lines = append(lines, " "+ui.StyleHint.Render(locale.Active.NoRecipes))
+		}
 		return strings.Join(lines, "\n")
 	}
 
 	var content []string
-	for i, r := range m.recipeList {
+	for i, r := range filtered {
 		f, hasFulfillment := m.recipeFulfillment[r.ID]
 
 		var statusIcon string
