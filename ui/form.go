@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/k-leveller/grocr/locale"
 )
 
 type FormField struct {
@@ -139,7 +140,7 @@ func (f *Form) View() string {
 		lines = append(lines, line)
 	}
 
-	footer := StyleHint.Render("  Tab/↓ to navigate fields, Enter to submit, Esc to cancel")
+	footer := StyleHint.Render("  " + locale.Active.FormNavHint)
 	lines = append(lines, "", footer)
 
 	return strings.Join(lines, "\n")

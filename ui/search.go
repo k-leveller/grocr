@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/k-leveller/grocr/api"
+	"github.com/k-leveller/grocr/locale"
 )
 
 type Search struct {
@@ -28,7 +29,7 @@ type Search struct {
 
 func NewSearch(products []api.Product, locations []api.Location, quantityUnits []api.QuantityUnit, stockAmounts map[int]float64, lookupMode bool) Search {
 	ti := textinput.New()
-	ti.Placeholder = "type to search..."
+	ti.Placeholder = locale.Active.SearchPlaceholder
 	ti.Focus()
 	ti.CharLimit = 80
 
@@ -139,7 +140,7 @@ func (s *Search) filter() {
 
 func (s *Search) locFilterName() string {
 	if s.LocFilter == 0 {
-		return "all locations"
+		return locale.Active.AllLocations
 	}
 	for _, loc := range s.Locations {
 		if loc.ID == s.LocFilter {
@@ -177,7 +178,7 @@ func formatQty(qty float64) string {
 func (s *Search) View() string {
 	var lines []string
 
-	header := " " + StyleBold.Render("Search:") + " " + s.Input.View()
+	header := " " + StyleBold.Render(locale.Active.SearchHeader) + " " + s.Input.View()
 	if len(s.Locations) > 0 {
 		header += "  " + StyleHint.Render("[Tab:") + " " + StyleInfo.Render(s.locFilterName()) + StyleHint.Render("]")
 	}
@@ -188,7 +189,7 @@ func (s *Search) View() string {
 	hasQuery := s.Input.Value() != "" || s.LocFilter != 0
 	if noResults {
 		if hasQuery {
-			lines = append(lines, " "+StyleHint.Render("No matches"))
+			lines = append(lines, " "+StyleHint.Render(locale.Active.NoMatches))
 		}
 	} else {
 		for i, p := range s.Filtered {
@@ -229,7 +230,7 @@ func (s *Search) View() string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, " "+StyleHint.Render("↑/↓ navigate · Tab filter location · Enter select · n new · Esc cancel"))
+	lines = append(lines, " "+StyleHint.Render(locale.Active.SearchNavHint))
 
 	return strings.Join(lines, "\n")
 }

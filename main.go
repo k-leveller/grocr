@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/k-leveller/grocr/api"
 	"github.com/k-leveller/grocr/config"
+	"github.com/k-leveller/grocr/locale"
 	"github.com/k-leveller/grocr/logger"
 )
 
@@ -28,6 +29,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+		locale.Load(cfg.Language)
 		grocy = api.NewGrocyClient(cfg)
 	} else {
 		// Dummy client for test mode

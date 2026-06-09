@@ -53,6 +53,7 @@ func TestLoad_configFile(t *testing.T) {
 		APIKey:               "file-key-123",
 		DisplayNameUserfield: "display",
 		TLSSkipVerify:        true,
+		Language:             "en",
 	}
 	data, _ := json.Marshal(want)
 	if err := os.WriteFile(filepath.Join(cfgDir, "config.json"), data, 0o600); err != nil {
@@ -74,6 +75,9 @@ func TestLoad_configFile(t *testing.T) {
 	}
 	if !cfg.TLSSkipVerify {
 		t.Error("expected TLSSkipVerify = true")
+	}
+	if cfg.Language != want.Language {
+		t.Errorf("Language = %q, want %q", cfg.Language, want.Language)
 	}
 }
 
