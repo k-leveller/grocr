@@ -548,8 +548,9 @@ func (c *GrocyClient) GetExpiringSoon(withinDays int) ([]ExpiringItem, error) {
 	}
 
 	var raw []struct {
-		ProductID      int    `json:"product_id"`
-		BestBeforeDate string `json:"best_before_date"`
+		ProductID      int     `json:"product_id"`
+		Amount         float64 `json:"amount"`
+		BestBeforeDate string  `json:"best_before_date"`
 		Product        struct {
 			Name string `json:"name"`
 		} `json:"product"`
@@ -561,6 +562,11 @@ func (c *GrocyClient) GetExpiringSoon(withinDays int) ([]ExpiringItem, error) {
 	threshold := time.Now().AddDate(0, 0, withinDays)
 	var result []ExpiringItem
 	for _, e := range raw {
+		// Parent products are listed with their children's aggregated stock
+		// even when they have no stock of their own; skip those rows.
+		if e.Amount <= 0 {
+			continue
+		}
 		if e.BestBeforeDate == "" || e.BestBeforeDate == "2999-12-31" {
 			continue
 		}

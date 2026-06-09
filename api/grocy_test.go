@@ -468,18 +468,22 @@ func TestGetPurchaseHistory(t *testing.T) {
 
 func TestGetExpiringSoon(t *testing.T) {
 	// Items with dates in the past or near future should be included;
-	// items far in the future and sentinel dates should be excluded.
+	// items far in the future, sentinel dates, and parent products with no
+	// stock of their own (amount 0) should be excluded.
+	type product struct {
+		Name string `json:"name"`
+	}
 	raw := []struct {
-		ProductID      int    `json:"product_id"`
-		BestBeforeDate string `json:"best_before_date"`
-		Product        struct {
-			Name string `json:"name"`
-		} `json:"product"`
+		ProductID      int     `json:"product_id"`
+		Amount         float64 `json:"amount"`
+		BestBeforeDate string  `json:"best_before_date"`
+		Product        product `json:"product"`
 	}{
-		{ProductID: 1, BestBeforeDate: "2020-01-01", Product: struct{ Name string `json:"name"` }{Name: "Expired"}},
-		{ProductID: 2, BestBeforeDate: "2999-12-31", Product: struct{ Name string `json:"name"` }{Name: "Never Expires"}},
-		{ProductID: 3, BestBeforeDate: "", Product: struct{ Name string `json:"name"` }{Name: "No Date"}},
-		{ProductID: 4, BestBeforeDate: "2099-12-31", Product: struct{ Name string `json:"name"` }{Name: "Far Future"}},
+		{ProductID: 1, Amount: 2, BestBeforeDate: "2020-01-01", Product: product{Name: "Expired"}},
+		{ProductID: 2, Amount: 1, BestBeforeDate: "2999-12-31", Product: product{Name: "Never Expires"}},
+		{ProductID: 3, Amount: 1, BestBeforeDate: "", Product: product{Name: "No Date"}},
+		{ProductID: 4, Amount: 1, BestBeforeDate: "2099-12-31", Product: product{Name: "Far Future"}},
+		{ProductID: 5, Amount: 0, BestBeforeDate: "2020-01-01", Product: product{Name: "Parent With Only Child Stock"}},
 	}
 
 	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
