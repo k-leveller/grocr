@@ -650,6 +650,21 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.expPanelCursor = min(m.expPanelCursor+1, len(m.expiringSoon)-1)
 			return m, nil
 		}
+	case "c":
+		if !m.loading && m.input.Value() == "" && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
+			item := m.expiringSoon[m.expPanelCursor]
+			var product *api.Product
+			for i := range m.allProducts {
+				if m.allProducts[i].ID == item.ProductID {
+					product = &m.allProducts[i]
+					break
+				}
+			}
+			m.currentProduct = product
+			m.loading = true
+			m.statusMsg = ""
+			return m, m.consumeFromPanel(item, product, false)
+		}
 	case "d":
 		if !m.loading && m.input.Value() == "" && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
 			item := m.expiringSoon[m.expPanelCursor]
@@ -663,7 +678,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.currentProduct = product
 			m.loading = true
 			m.statusMsg = ""
-			return m, m.consumeFromPanel(item, product)
+			return m, m.consumeFromPanel(item, product, true)
 		}
 	case "m":
 		if m.input.Value() == "" {
@@ -959,7 +974,7 @@ func (m Model) loadStockForConsume() tea.Cmd {
 	}
 }
 
-func (m Model) consumeFromPanel(item api.ExpiringItem, product *api.Product) tea.Cmd {
+func (m Model) consumeFromPanel(item api.ExpiringItem, product *api.Product, spoiled bool) tea.Cmd {
 	return func() tea.Msg {
 		if m.testMode {
 			return actionResultMsg{err: fmt.Errorf("cannot consume in test mode")}
@@ -971,11 +986,15 @@ func (m Model) consumeFromPanel(item api.ExpiringItem, product *api.Product) tea
 		if info.StockAmount <= 0 {
 			return actionResultMsg{err: fmt.Errorf("no stock on hand for %s", item.ProductName)}
 		}
-		err = m.grocy.ConsumeStock(item.ProductID, 1, true)
+		err = m.grocy.ConsumeStock(item.ProductID, 1, spoiled)
+		action := "consume"
+		if spoiled {
+			action = "spoiled"
+		}
 		entry := ui.LogEntry{
 			ProductName: item.ProductName,
 			Quantity:    1,
-			Action:      "spoiled",
+			Action:      action,
 			Success:     err == nil,
 			Time:        time.Now(),
 		}
