@@ -18,6 +18,7 @@ func RenderHelp(width, height int) string {
 		"  ?       Toggle this help\n" +
 		"  ↑/k     Older UPC history entry (or expiry panel up when no history)\n" +
 		"  ↓/j     Newer UPC history entry (or expiry panel down)\n" +
+		"  c       Mark as consumed (expiring-soon panel)\n" +
 		"  d       Mark as spoiled (expiring-soon panel)\n" +
 		"  Tab/↓   Next field (form)\n" +
 		"  S-Tab/↑ Previous field (form)\n" +
