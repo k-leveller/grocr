@@ -970,9 +970,9 @@ func (m Model) loadRecipeList() tea.Cmd {
 			}
 		}
 		fulfillment := make(map[int]api.RecipeFulfillment, len(recipes))
-		if all, err := m.grocy.GetAllRecipeFulfillments(); err == nil {
-			byID := make(map[int]api.RecipeFulfillment, len(all))
-			for _, f := range all {
+		if fulfillments, err := m.grocy.GetAllRecipeFulfillments(); err == nil {
+			byID := make(map[int]api.RecipeFulfillment, len(fulfillments))
+			for _, f := range fulfillments {
 				byID[f.RecipeID] = f
 			}
 			for _, r := range recipes {
