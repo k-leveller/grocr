@@ -12,6 +12,7 @@ type Config struct {
 	APIKey               string `json:"api_key"`
 	DisplayNameUserfield string `json:"display_name_userfield"`
 	TLSSkipVerify        bool   `json:"tls_skip_verify"`
+	Language             string `json:"language"`
 }
 
 func Load() (*Config, error) {

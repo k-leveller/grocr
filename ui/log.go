@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/k-leveller/grocr/locale"
 )
 
 type LogEntry struct {
@@ -42,18 +44,18 @@ func RenderLog(entries []LogEntry, maxLines int) string {
 
 		var detail string
 		if e.Action == "consume" {
-			detail = fmt.Sprintf("%s %s x%g consumed", icon, e.ProductName, e.Quantity)
+			detail = fmt.Sprintf(locale.Active.FmtLogConsumed, icon, e.ProductName, e.Quantity)
 		} else if e.Action == "spoiled" {
-			detail = fmt.Sprintf("%s %s x%g spoiled", icon, e.ProductName, e.Quantity)
+			detail = fmt.Sprintf(locale.Active.FmtLogSpoiled, icon, e.ProductName, e.Quantity)
 		} else if e.Action == "transfer" {
-			detail = fmt.Sprintf("%s %s x%g %s", icon, e.ProductName, e.Quantity, e.Location)
+			detail = fmt.Sprintf(locale.Active.FmtLogTransfer, icon, e.ProductName, e.Quantity, e.Location)
 		} else {
-			parts := []string{fmt.Sprintf("%s %s x%g", icon, e.ProductName, e.Quantity)}
+			parts := []string{fmt.Sprintf(locale.Active.FmtLogAdd, icon, e.ProductName, e.Quantity)}
 			if e.Location != "" {
-				parts = append(parts, "→ "+e.Location)
+				parts = append(parts, fmt.Sprintf(locale.Active.LogAddTo, e.Location))
 			}
 			if e.Expiry != "" {
-				parts = append(parts, "("+e.Expiry+")")
+				parts = append(parts, fmt.Sprintf(locale.Active.LogAddExpiry, e.Expiry))
 			}
 			detail = strings.Join(parts, " ")
 		}

@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/k-leveller/grocr/api"
+	"github.com/k-leveller/grocr/locale"
 	"github.com/k-leveller/grocr/logger"
 	"github.com/k-leveller/grocr/scanner"
 	"github.com/k-leveller/grocr/ui"
@@ -196,7 +197,7 @@ type recipeListMsg struct {
 
 func NewModel(grocy *api.GrocyClient, off *api.OFFClient, testMode bool) Model {
 	ti := textinput.New()
-	ti.Placeholder = "Scan UPC or type command..."
+	ti.Placeholder = locale.Active.InputPlaceholder
 	ti.Focus()
 	ti.CharLimit = 20
 
@@ -305,7 +306,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case defaultsLoadedMsg:
 		if msg.err != nil {
 			logger.LogError("failed to load Grocy defaults: " + msg.err.Error())
-			m.statusMsg = "Failed to load Grocy defaults: " + msg.err.Error()
+			m.statusMsg = fmt.Sprintf(locale.Active.ErrLoadDefaults, msg.err.Error())
 			m.statusErr = true
 		} else {
 			m.defaults = msg.defaults
@@ -333,7 +334,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case priceHistoryMsg:
 		if m.currentProduct != nil && msg.productID == m.currentProduct.ID {
 			if msg.err != nil {
-				m.statusMsg = "Price history unavailable: " + msg.err.Error()
+				m.statusMsg = fmt.Sprintf(locale.Active.ErrPriceHistory, msg.err.Error())
 				m.statusErr = true
 				m.state = StateLookupView
 			} else {
@@ -350,7 +351,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		if msg.err != nil {
 			logger.LogError("lookup error: " + msg.err.Error())
-			m.statusMsg = "Lookup error: " + msg.err.Error()
+			m.statusMsg = fmt.Sprintf(locale.Active.ErrLookup, msg.err.Error())
 			m.statusErr = true
 			m.state = StateIdle
 			return m, m.input.Focus()
@@ -370,7 +371,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		if msg.err != nil {
 			logger.LogError("action error: " + msg.err.Error())
-			m.statusMsg = "Error: " + msg.err.Error()
+			m.statusMsg = fmt.Sprintf(locale.Active.ErrAction, msg.err.Error())
 			m.statusErr = true
 		} else {
 			m.logEntries = append([]ui.LogEntry{msg.entry}, m.logEntries...)
@@ -380,7 +381,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.statusMsg = ""
 			case "spoiled":
 				logger.LogConsume(msg.entry.ProductName, msg.entry.Quantity)
-				m.statusMsg = "Spoiled: " + msg.entry.ProductName
+				m.statusMsg = fmt.Sprintf(locale.Active.FmtSpoiled, msg.entry.ProductName)
 				m.statusErr = false
 			case "transfer":
 				logger.LogTransfer(msg.entry.ProductName, msg.entry.Quantity, msg.entry.FromLocation, msg.entry.ToLocation)
@@ -408,11 +409,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case shoppingListMsg:
 		if msg.err != nil {
 			logger.LogError("shopping list: " + msg.err.Error())
-			m.statusMsg = "Shopping list error: " + msg.err.Error()
+			m.statusMsg = fmt.Sprintf(locale.Active.ErrShoppingList, msg.err.Error())
 			m.statusErr = true
 		} else {
 			logger.LogShoppingList(msg.productName)
-			m.statusMsg = msg.productName + " added to shopping list"
+			m.statusMsg = fmt.Sprintf(locale.Active.FmtAddedToShoppingList, msg.productName)
 			m.statusErr = false
 		}
 		return m, nil
@@ -421,10 +422,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		if msg.err != nil {
 			logger.LogError("export: " + msg.err.Error())
-			m.statusMsg = "Export failed: " + msg.err.Error()
+			m.statusMsg = fmt.Sprintf(locale.Active.ErrExport, msg.err.Error())
 			m.statusErr = true
 		} else {
-			m.statusMsg = "Exported to " + msg.path
+			m.statusMsg = fmt.Sprintf(locale.Active.FmtExportedTo, msg.path)
 			m.statusErr = false
 		}
 		return m, nil
@@ -433,7 +434,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mealPlanLoaded = true
 		if msg.err != nil {
 			if m.state == StateMealPlan || m.state == StateTodayMealPlan {
-				m.statusMsg = "Meal plan unavailable: " + msg.err.Error()
+				m.statusMsg = fmt.Sprintf(locale.Active.ErrMealPlan, msg.err.Error())
 				m.statusErr = true
 			}
 		} else {
@@ -449,7 +450,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recipeListLoaded = true
 		if msg.err != nil {
 			if m.state == StateRecipeList {
-				m.statusMsg = "Failed to load recipes: " + msg.err.Error()
+				m.statusMsg = fmt.Sprintf(locale.Active.ErrLoadRecipes, msg.err.Error())
 				m.statusErr = true
 			}
 		} else {
@@ -471,7 +472,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case linkBarcodeResultMsg:
 		if msg.err != nil {
 			logger.LogError("link barcode: " + msg.err.Error())
-			m.statusMsg = "Link failed: " + msg.err.Error()
+			m.statusMsg = fmt.Sprintf(locale.Active.ErrLinkBarcode, msg.err.Error())
 			m.statusErr = true
 			m.state = StateUnknownBarcode
 			return m, nil
@@ -479,7 +480,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		logger.LogLinkBarcode(m.currentUPC, msg.product.Name)
 		m.currentProduct = msg.product
 		m.isNewProduct = false
-		m.statusMsg = "Barcode linked to " + msg.product.Name
+		m.statusMsg = fmt.Sprintf(locale.Active.FmtBarcodeLinkSuccess, msg.product.Name)
 		m.statusErr = false
 		m.state = StateDisplay
 		m.form = m.buildExistingProductForm()
@@ -575,7 +576,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.loading = false
 			m.lookupSeq++ // invalidate the in-flight lookup
 			m.currentUPC = ""
-			m.statusMsg = "Cancelled"
+			m.statusMsg = locale.Active.Cancelled
 			m.statusErr = false
 			return m, m.input.Focus()
 		}
@@ -754,7 +755,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		upc := scanner.CleanUPC(val)
 		if upc == "" {
-			m.statusMsg = "Invalid UPC: " + val
+			m.statusMsg = fmt.Sprintf(locale.Active.ErrInvalidUPC, val)
 			m.statusErr = true
 			m.input.SetValue("")
 			m.historyPos = -1
@@ -783,7 +784,7 @@ func (m Model) handleLookupResult(msg lookupResultMsg) (tea.Model, tea.Cmd) {
 
 	if m.mode == "consume" {
 		if msg.product == nil {
-			m.statusMsg = "Product not found in Grocy — cannot consume"
+			m.statusMsg = locale.Active.ErrProductNotFoundConsume
 			m.statusErr = true
 			m.state = StateIdle
 			return m, m.input.Focus()
@@ -795,7 +796,7 @@ func (m Model) handleLookupResult(msg lookupResultMsg) (tea.Model, tea.Cmd) {
 
 	if m.mode == "lookup" {
 		if msg.product == nil {
-			m.statusMsg = "Product not found in Grocy"
+			m.statusMsg = locale.Active.ErrProductNotFound
 			m.statusErr = true
 			m.state = StateIdle
 			return m, m.input.Focus()
@@ -950,7 +951,7 @@ func (m Model) loadPriceHistory() tea.Cmd {
 func (m Model) loadStockForConsume() tea.Cmd {
 	return func() tea.Msg {
 		if m.testMode || m.currentProduct == nil {
-			return actionResultMsg{err: fmt.Errorf("cannot consume in test mode")}
+			return actionResultMsg{err: fmt.Errorf("%s", locale.Active.ErrCannotConsumeTestMode)}
 		}
 		info, err := m.grocy.GetStock(m.currentProduct.ID)
 		if err != nil {
@@ -959,7 +960,7 @@ func (m Model) loadStockForConsume() tea.Cmd {
 		// We store it and let the view handle prompting for quantity
 		// For now, consume 1
 		if info.StockAmount <= 0 {
-			return actionResultMsg{err: fmt.Errorf("no stock on hand")}
+			return actionResultMsg{err: fmt.Errorf("%s", locale.Active.ErrNoStock)}
 		}
 		err = m.grocy.ConsumeStock(m.currentProduct.ID, 1, false)
 		entry := ui.LogEntry{
@@ -984,7 +985,7 @@ func (m Model) consumeFromPanel(item api.ExpiringItem, product *api.Product, spo
 			return actionResultMsg{err: err}
 		}
 		if info.StockAmount <= 0 {
-			return actionResultMsg{err: fmt.Errorf("no stock on hand for %s", item.ProductName)}
+			return actionResultMsg{err: fmt.Errorf("%s", fmt.Sprintf(locale.Active.ErrNoStockFor, item.ProductName))}
 		}
 		err = m.grocy.ConsumeStock(item.ProductID, 1, spoiled)
 		action := "consume"
@@ -1034,7 +1035,7 @@ func (m Model) buildNewProductForm() ui.Form {
 	if shelfDays > 0 {
 		expDate := time.Now().AddDate(0, 0, shelfDays).Format("2006-01-02")
 		expiryDefault = expDate
-		expiryHint = fmt.Sprintf("~%dd from %s", shelfDays, shelfSource)
+		expiryHint = fmt.Sprintf(locale.Active.FmtShelfFromSource, shelfDays, shelfSource)
 	}
 
 	qtyUnitDefault := ""
@@ -1080,18 +1081,18 @@ func (m Model) buildNewProductForm() ui.Form {
 	}
 
 	fields := []ui.FormField{
-		{Label: "Name", Default: defaultName, Required: true},
+		{Label: locale.Active.FieldName, Default: defaultName, Required: true},
 	}
 	if m.grocy.DisplayNameUserfield() != "" {
-		fields = append(fields, ui.FormField{Label: "Display name", Default: ""})
+		fields = append(fields, ui.FormField{Label: locale.Active.FieldDisplayName, Default: ""})
 	}
 	fields = append(fields,
-		ui.FormField{Label: "Qty unit", Default: qtyUnitDefault, Hint: qtyUnitHint, Required: true},
-		ui.FormField{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (YYYY-MM-DD, days, or blank=never)"},
-		ui.FormField{Label: "Location", Default: locationDefault, Hint: locationHint},
-		ui.FormField{Label: "Store", Default: storeDefault, Hint: storeHint},
-		ui.FormField{Label: "Quantity", Default: "1"},
-		ui.FormField{Label: "Price", Default: "", Hint: "total price paid"},
+		ui.FormField{Label: locale.Active.FieldQtyUnit, Default: qtyUnitDefault, Hint: qtyUnitHint, Required: true},
+		ui.FormField{Label: locale.Active.FieldExpires, Default: expiryDefault, Hint: expiryHint + " " + locale.Active.FieldExpiresHint},
+		ui.FormField{Label: locale.Active.FieldLocation, Default: locationDefault, Hint: locationHint},
+		ui.FormField{Label: locale.Active.FieldStore, Default: storeDefault, Hint: storeHint},
+		ui.FormField{Label: locale.Active.FieldQuantity, Default: "1"},
+		ui.FormField{Label: locale.Active.FieldPrice, Default: "", Hint: locale.Active.FieldPriceHint},
 	)
 
 	return ui.NewForm(fields)
@@ -1104,7 +1105,7 @@ func (m Model) buildExistingProductForm() ui.Form {
 	if shelfDays > 0 {
 		expDate := time.Now().AddDate(0, 0, shelfDays).Format("2006-01-02")
 		expiryDefault = expDate
-		expiryHint = fmt.Sprintf("~%dd from product", shelfDays)
+		expiryHint = fmt.Sprintf(locale.Active.FmtShelfFromProduct, shelfDays)
 	}
 
 	locationDefault := ""
@@ -1155,11 +1156,11 @@ func (m Model) buildExistingProductForm() ui.Form {
 	}
 
 	fields := []ui.FormField{
-		{Label: "Expires", Default: expiryDefault, Hint: expiryHint + " (YYYY-MM-DD, days, or blank=never)"},
-		{Label: "Location", Default: locationDefault, Hint: locationHint},
-		{Label: "Store", Default: storeDefault, Hint: storeHint},
-		{Label: "Quantity", Default: "1", Hint: qtyUnitHint},
-		{Label: "Price", Default: "", Hint: "total price paid"},
+		{Label: locale.Active.FieldExpires, Default: expiryDefault, Hint: expiryHint + " " + locale.Active.FieldExpiresHint},
+		{Label: locale.Active.FieldLocation, Default: locationDefault, Hint: locationHint},
+		{Label: locale.Active.FieldStore, Default: storeDefault, Hint: storeHint},
+		{Label: locale.Active.FieldQuantity, Default: "1", Hint: qtyUnitHint},
+		{Label: locale.Active.FieldPrice, Default: "", Hint: locale.Active.FieldPriceHint},
 	}
 
 	return ui.NewForm(fields)
@@ -1195,9 +1196,9 @@ func (m Model) buildTransferForm() ui.Form {
 	}
 
 	fields := []ui.FormField{
-		{Label: "Quantity", Default: "1"},
-		{Label: "From", Default: fromDefault, Hint: locationHint},
-		{Label: "To", Default: toDefault, Hint: locationHint},
+		{Label: locale.Active.FieldQuantity, Default: "1"},
+		{Label: locale.Active.FieldFrom, Default: fromDefault, Hint: locationHint},
+		{Label: locale.Active.FieldTo, Default: toDefault, Hint: locationHint},
 	}
 
 	return ui.NewForm(fields)
@@ -1231,7 +1232,7 @@ func (m Model) submitTransfer() tea.Cmd {
 		toID := m.resolveLocation(m.form.Value(2))
 
 		if fromID == toID {
-			return actionResultMsg{err: fmt.Errorf("from and to locations must differ")}
+			return actionResultMsg{err: fmt.Errorf("%s", locale.Active.ErrSameLocation)}
 		}
 
 		fromName := m.locationName(fromID)
@@ -1444,7 +1445,7 @@ func (m Model) handleEditNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if !m.testMode {
 				if err := m.grocy.UpdateProductName(m.currentProduct.ID, newName); err != nil {
 					logger.LogError("update product name: " + err.Error())
-					m.statusMsg = "Error updating name: " + err.Error()
+					m.statusMsg = fmt.Sprintf(locale.Active.ErrUpdateName, err.Error())
 					m.statusErr = true
 					m.state = StateDisplay
 					m.applyPriceDefault()
@@ -1453,7 +1454,7 @@ func (m Model) handleEditNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.currentProduct.Name = newName
 			logger.LogEditName(newName, oldName)
-			m.statusMsg = "Name updated"
+			m.statusMsg = locale.Active.NameUpdated
 			m.statusErr = false
 		}
 		m.state = StateDisplay
@@ -1515,7 +1516,7 @@ func (m Model) handleEditNotesKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if !m.testMode {
 				if err := m.grocy.UpdateProductDescription(m.currentProduct.ID, newNotes); err != nil {
 					logger.LogError("update product notes: " + err.Error())
-					m.statusMsg = "Error updating notes: " + err.Error()
+					m.statusMsg = fmt.Sprintf(locale.Active.ErrUpdateNotes, err.Error())
 					m.statusErr = true
 					m.state = StateLookupView
 					return m, nil
@@ -1523,7 +1524,7 @@ func (m Model) handleEditNotesKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.currentProduct.Description = newNotes
 			logger.LogEditNotes(m.currentProduct.Name)
-			m.statusMsg = "Notes updated"
+			m.statusMsg = locale.Active.NotesUpdated
 			m.statusErr = false
 		}
 		m.state = StateLookupView
@@ -2020,7 +2021,7 @@ func (m Model) daysFromExpiry(dateStr string) *int {
 
 func (m Model) View() string {
 	if m.width == 0 {
-		return "Loading..."
+		return locale.Active.Loading
 	}
 
 	if m.showHelp {
@@ -2067,28 +2068,28 @@ func (m Model) renderInputLine() string {
 	case StateIdle:
 		return " > " + m.input.View()
 	case StateLookupView:
-		return " " + ui.StyleHint.Render("n = notes  •  p = price history  •  t = transfer  •  Esc/Enter = dismiss")
+		return " " + ui.StyleHint.Render(locale.Active.HintLookupView)
 	case StateTransfer:
-		return " " + ui.StyleHint.Render("Tab/↓ next field  •  Enter submit  •  Esc cancel")
+		return " " + ui.StyleHint.Render(locale.Active.HintTransfer)
 	case StatePriceHistory:
-		return " " + ui.StyleHint.Render("↑/↓/j/k = navigate  •  Esc/p = back")
+		return " " + ui.StyleHint.Render(locale.Active.HintPriceHistory)
 	case StateMealPlan:
-		return " " + ui.StyleHint.Render("↑/↓/j/k = scroll  •  r = refresh  •  Esc/q = back")
+		return " " + ui.StyleHint.Render(locale.Active.HintMealPlan)
 	case StateTodayMealPlan:
-		return " " + ui.StyleHint.Render("r = refresh  •  Esc/q = back")
+		return " " + ui.StyleHint.Render(locale.Active.HintTodayMealPlan)
 	case StateRecipeList:
-		return " " + ui.StyleHint.Render("↑/↓/j/k = navigate  •  r = refresh  •  Esc/q = back")
+		return " " + ui.StyleHint.Render(locale.Active.HintRecipeList)
 	case StateEditNotes:
-		return " " + ui.StyleHint.Render("Enter to save  •  Esc to cancel")
+		return " " + ui.StyleHint.Render(locale.Active.HintEditNotes)
 	case StateShoppingListPrompt:
-		return " " + ui.StyleHint.Render("y = yes, any other key = no")
+		return " " + ui.StyleHint.Render(locale.Active.HintYesNo)
 	case StateUnknownBarcode:
-		return " " + ui.StyleHint.Render("C/Enter = create new  •  L = link existing  •  Esc = cancel")
+		return " " + ui.StyleHint.Render(locale.Active.HintUnknownBarcode)
 	default:
 		if m.loading {
-			return " " + ui.StyleHint.Render("loading...")
+			return " " + ui.StyleHint.Render(locale.Active.HintLoading)
 		}
-		return " " + ui.StyleHint.Render("(form active)")
+		return " " + ui.StyleHint.Render(locale.Active.HintFormActive)
 	}
 }
 
@@ -2112,7 +2113,7 @@ func (m Model) renderMainContent(width, bodyH int) string {
 			sections = append(sections, "")
 		}
 	case StateLookup:
-		sections = append(sections, " "+ui.StyleInfo.Render(fmt.Sprintf("Looking up UPC %s...", m.currentUPC)))
+		sections = append(sections, " "+ui.StyleInfo.Render(fmt.Sprintf(locale.Active.FmtLookingUpUPC, m.currentUPC)))
 	case StateDisplay, StateForm:
 		if m.statusMsg != "" {
 			if m.statusErr {
@@ -2128,17 +2129,17 @@ func (m Model) renderMainContent(width, bodyH int) string {
 	case StateEditName:
 		sections = append(sections, m.renderProductInfo())
 		sections = append(sections, "")
-		sections = append(sections, " "+ui.StyleBold.Render("Edit name: ")+m.editInput.View())
-		sections = append(sections, " "+ui.StyleHint.Render("Enter to save, Esc to cancel"))
+		sections = append(sections, " "+ui.StyleBold.Render(locale.Active.EditNameLabel)+m.editInput.View())
+		sections = append(sections, " "+ui.StyleHint.Render(locale.Active.EditNameHint))
 	case StateEditNotes:
 		sections = append(sections, m.renderLookupView())
 		sections = append(sections, "")
-		sections = append(sections, " "+ui.StyleBold.Render("Notes: ")+m.editInput.View())
-		sections = append(sections, " "+ui.StyleHint.Render("Enter to save, Esc to cancel"))
+		sections = append(sections, " "+ui.StyleBold.Render(locale.Active.NotesLabel)+m.editInput.View())
+		sections = append(sections, " "+ui.StyleHint.Render(locale.Active.EditNameHint))
 	case StateConsume:
 		if m.currentProduct != nil {
-			sections = append(sections, fmt.Sprintf(" %s %s", ui.StyleBold.Render("Consuming:"), m.currentProduct.Name))
-			sections = append(sections, " "+ui.StyleHint.Render("Processing..."))
+			sections = append(sections, fmt.Sprintf(" %s %s", ui.StyleBold.Render(locale.Active.ConsumingLabel), m.currentProduct.Name))
+			sections = append(sections, " "+ui.StyleHint.Render(locale.Active.Processing))
 		}
 	case StateSearch:
 		sections = append(sections, m.search.View())
@@ -2147,7 +2148,7 @@ func (m Model) renderMainContent(width, bodyH int) string {
 	case StateTransfer:
 		sections = append(sections, m.renderLookupView())
 		sections = append(sections, "")
-		sections = append(sections, " "+ui.StyleBold.Render("Transfer stock"))
+		sections = append(sections, " "+ui.StyleBold.Render(locale.Active.TransferStockHeader))
 		sections = append(sections, m.form.View())
 	case StatePriceHistory:
 		sections = append(sections, m.renderPriceHistoryView(bodyH))
@@ -2160,18 +2161,18 @@ func (m Model) renderMainContent(width, bodyH int) string {
 	case StateShoppingListPrompt:
 		if m.currentProduct != nil {
 			sections = append(sections, fmt.Sprintf(" %s %s",
-				ui.StyleBold.Render("Consumed:"), m.currentProduct.Name))
-			sections = append(sections, " "+ui.StyleWarning.Render("Stock is now zero."))
+				ui.StyleBold.Render(locale.Active.ConsumedLabel), m.currentProduct.Name))
+			sections = append(sections, " "+ui.StyleWarning.Render(locale.Active.StockNowZero))
 			sections = append(sections, "")
-			sections = append(sections, " Add to shopping list? [y/N]")
+			sections = append(sections, " "+locale.Active.ShoppingListPrompt)
 		}
 	case StateUnknownBarcode:
 		sections = append(sections, m.renderProductInfo())
 		sections = append(sections, "")
-		sections = append(sections, " "+ui.StyleWarning.Render("Unknown barcode — what would you like to do?"))
+		sections = append(sections, " "+ui.StyleWarning.Render(locale.Active.UnknownBarcodePrompt))
 		sections = append(sections, "")
-		sections = append(sections, "  [C] / Enter  Create a new product")
-		sections = append(sections, "  [L]          Link to an existing product")
+		sections = append(sections, locale.Active.UnknownBarcodeCreate)
+		sections = append(sections, locale.Active.UnknownBarcodeLink)
 	}
 
 	return strings.Join(sections, "\n")
@@ -2182,16 +2183,16 @@ func (m Model) renderExpiringSoonPanel(bodyH int) string {
 	nameColW := expPanelWidth - 2 - daysColW // 1 for " " prefix, 1 for " " before days
 
 	var lines []string
-	lines = append(lines, " "+ui.StyleBold.Render("Expiring Soon"))
+	lines = append(lines, " "+ui.StyleBold.Render(locale.Active.ExpiringSoonHeader))
 	lines = append(lines, " "+ui.StyleSeparator.Render(strings.Repeat("─", expPanelWidth-2)))
 
 	if !m.expiringSoonLoaded {
-		lines = append(lines, " "+ui.StyleHint.Render("Loading..."))
+		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.Loading))
 		return strings.Join(lines, "\n")
 	}
 
 	if len(m.expiringSoon) == 0 {
-		lines = append(lines, " "+ui.StyleHint.Render("None expiring soon"))
+		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.NoneExpiringSoon))
 		return strings.Join(lines, "\n")
 	}
 
@@ -2245,7 +2246,7 @@ func (m Model) renderExpiringSoonPanel(bodyH int) string {
 func (m Model) renderLookupView() string {
 	var lines []string
 
-	lines = append(lines, " "+ui.StyleBold.Render("Product Overview"))
+	lines = append(lines, " "+ui.StyleBold.Render(locale.Active.ProductOverview))
 	lines = append(lines, "")
 
 	if m.currentProduct == nil {
@@ -2253,13 +2254,13 @@ func (m Model) renderLookupView() string {
 	}
 
 	lines = append(lines, fmt.Sprintf(" %s %s  %s",
-		ui.StyleLabel.Render("Product:"),
+		ui.StyleLabel.Render(locale.Active.LabelProduct),
 		m.currentProduct.Name,
-		ui.StyleHint.Render(fmt.Sprintf("[id:%d]", m.currentProduct.ID))))
+		ui.StyleHint.Render(fmt.Sprintf(locale.Active.FmtProductIDHint, m.currentProduct.ID))))
 
 	if m.currentUPC != "" {
 		lines = append(lines, fmt.Sprintf(" %s %s",
-			ui.StyleLabel.Render("UPC:"),
+			ui.StyleLabel.Render(locale.Active.LabelUPC),
 			m.currentUPC))
 	}
 
@@ -2274,19 +2275,19 @@ func (m Model) renderLookupView() string {
 			}
 		}
 		lines = append(lines, fmt.Sprintf(" %s %s",
-			ui.StyleLabel.Render("In stock:"),
+			ui.StyleLabel.Render(locale.Active.LabelInStock),
 			stockLine))
 	} else {
 		lines = append(lines, fmt.Sprintf(" %s %s",
-			ui.StyleLabel.Render("In stock:"),
-			ui.StyleHint.Render("loading...")))
+			ui.StyleLabel.Render(locale.Active.LabelInStock),
+			ui.StyleHint.Render(locale.Active.HintLoading)))
 	}
 
 	if m.defaults != nil {
 		for _, loc := range m.defaults.Locations {
 			if loc.ID == m.currentProduct.LocationID {
 				lines = append(lines, fmt.Sprintf(" %s %s",
-					ui.StyleLabel.Render("Location:"),
+					ui.StyleLabel.Render(locale.Active.LabelLocation),
 					loc.Name))
 				break
 			}
@@ -2294,7 +2295,7 @@ func (m Model) renderLookupView() string {
 		for _, s := range m.defaults.Stores {
 			if s.ID == m.currentProduct.ShoppingLocationID {
 				lines = append(lines, fmt.Sprintf(" %s %s",
-					ui.StyleLabel.Render("Store:"),
+					ui.StyleLabel.Render(locale.Active.LabelStore),
 					s.Name))
 				break
 			}
@@ -2302,12 +2303,13 @@ func (m Model) renderLookupView() string {
 	}
 
 	if m.currentProduct.DefaultBestBeforeDays > 0 {
-		lines = append(lines, fmt.Sprintf(" %s %d days",
-			ui.StyleLabel.Render("Shelf life:"),
+		lines = append(lines, fmt.Sprintf(" %s "+locale.Active.FmtDays,
+			ui.StyleLabel.Render(locale.Active.LabelShelfLife),
 			m.currentProduct.DefaultBestBeforeDays))
 	} else if m.currentProduct.DefaultBestBeforeDays < 0 {
-		lines = append(lines, fmt.Sprintf(" %s never",
-			ui.StyleLabel.Render("Shelf life:")))
+		lines = append(lines, fmt.Sprintf(" %s %s",
+			ui.StyleLabel.Render(locale.Active.LabelShelfLife),
+			locale.Active.ShelfLifeNever))
 	}
 
 	if m.stockInfo != nil && m.stockInfo.LastPrice > 0 {
@@ -2325,20 +2327,20 @@ func (m Model) renderLookupView() string {
 			priceLabel += "/" + unitName
 		}
 		lines = append(lines, fmt.Sprintf(" %s %s",
-			ui.StyleLabel.Render("Last price:"),
+			ui.StyleLabel.Render(locale.Active.LabelLastPrice),
 			priceLabel))
 	}
 
 	if m.currentProduct.Description != "" {
 		lines = append(lines, fmt.Sprintf(" %s %s",
-			ui.StyleLabel.Render("Notes:"),
+			ui.StyleLabel.Render(locale.Active.LabelNotes),
 			m.currentProduct.Description))
 	}
 
 	if m.offInfo != nil && m.offInfo.Name != "" {
 		lines = append(lines, "")
 		lines = append(lines, fmt.Sprintf(" %s %s",
-			ui.StyleLabel.Render("OFF name:"),
+			ui.StyleLabel.Render(locale.Active.LabelOFFName),
 			m.offInfo.Name))
 		if m.offInfo.Categories != "" {
 			cats := []rune(m.offInfo.Categories)
@@ -2347,7 +2349,7 @@ func (m Model) renderLookupView() string {
 				display = string(cats[:57]) + "..."
 			}
 			lines = append(lines, fmt.Sprintf(" %s %s",
-				ui.StyleLabel.Render("Categories:"),
+				ui.StyleLabel.Render(locale.Active.LabelCategories),
 				display))
 		}
 	}
@@ -2362,16 +2364,16 @@ func (m Model) renderPriceHistoryView(bodyH int) string {
 	if m.currentProduct != nil {
 		name = m.currentProduct.Name
 	}
-	lines = append(lines, fmt.Sprintf(" %s %s", ui.StyleBold.Render("Price History:"), name))
+	lines = append(lines, fmt.Sprintf(" %s %s", ui.StyleBold.Render(locale.Active.PriceHistoryHeader), name))
 	lines = append(lines, "")
 
 	if m.priceHistory == nil {
-		lines = append(lines, " "+ui.StyleHint.Render("Loading..."))
+		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.Loading))
 		return strings.Join(lines, "\n")
 	}
 
 	if len(m.priceHistory) == 0 {
-		lines = append(lines, " "+ui.StyleHint.Render("No purchase history found."))
+		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.NoPriceHistory))
 		return strings.Join(lines, "\n")
 	}
 
@@ -2417,7 +2419,7 @@ func (m Model) renderPriceHistoryView(bodyH int) string {
 				priceStr += "/" + unitName
 			}
 		} else {
-			priceStr = ui.StyleHint.Render("(no price)")
+			priceStr = ui.StyleHint.Render(locale.Active.NoPriceData)
 		}
 
 		storeName := ""
@@ -2443,15 +2445,15 @@ func (m Model) renderPriceHistoryView(bodyH int) string {
 
 func (m Model) renderMealPlanView(bodyH int) string {
 	var lines []string
-	lines = append(lines, " "+ui.StyleBold.Render("Meal Plan — Next 7 Days"))
+	lines = append(lines, " "+ui.StyleBold.Render(locale.Active.MealPlanHeader))
 	lines = append(lines, "")
 
 	if !m.mealPlanLoaded {
-		lines = append(lines, " "+ui.StyleHint.Render("Loading..."))
+		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.Loading))
 		return strings.Join(lines, "\n")
 	}
 	if len(m.mealPlan) == 0 {
-		lines = append(lines, " "+ui.StyleHint.Render("No meals planned for the next 7 days."))
+		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.NoMealsThisWeek))
 		return strings.Join(lines, "\n")
 	}
 
@@ -2484,9 +2486,9 @@ func (m Model) renderMealPlanView(bodyH int) string {
 		} else {
 			switch g.day {
 			case today:
-				dayLabel = t.Format("Mon Jan 02") + "  " + ui.StyleSuccess.Render("(Today)")
+				dayLabel = t.Format("Mon Jan 02") + "  " + ui.StyleSuccess.Render(locale.Active.Today)
 			case tomorrow:
-				dayLabel = t.Format("Mon Jan 02") + "  " + ui.StyleInfo.Render("(Tomorrow)")
+				dayLabel = t.Format("Mon Jan 02") + "  " + ui.StyleInfo.Render(locale.Active.Tomorrow)
 			default:
 				dayLabel = t.Format("Mon Jan 02")
 			}
@@ -2535,14 +2537,14 @@ func (m Model) mealPlanItemDesc(item api.MealPlanItem) string {
 	case item.RecipeID != nil:
 		name, ok := m.mealPlanRecipes[*item.RecipeID]
 		if !ok {
-			name = fmt.Sprintf("Recipe #%d", *item.RecipeID)
+			name = fmt.Sprintf(locale.Active.FmtRecipeID, *item.RecipeID)
 		}
 		if item.RecipeServings > 0 {
-			return fmt.Sprintf("%s  %s", name, ui.StyleHint.Render(fmt.Sprintf("(%.0f srv)", item.RecipeServings)))
+			return fmt.Sprintf("%s  %s", name, ui.StyleHint.Render(fmt.Sprintf(locale.Active.FmtServings, item.RecipeServings)))
 		}
 		return name
 	case item.ProductID != nil:
-		name := fmt.Sprintf("Product #%d", *item.ProductID)
+		name := fmt.Sprintf(locale.Active.FmtProductID, *item.ProductID)
 		for _, p := range m.allProducts {
 			if p.ID == *item.ProductID {
 				name = p.Name
@@ -2550,7 +2552,7 @@ func (m Model) mealPlanItemDesc(item api.MealPlanItem) string {
 			}
 		}
 		if item.ProductAmount > 0 {
-			return fmt.Sprintf("%s  %s", name, ui.StyleHint.Render(fmt.Sprintf("×%.0f", item.ProductAmount)))
+			return fmt.Sprintf("%s  %s", name, ui.StyleHint.Render(fmt.Sprintf(locale.Active.FmtProductAmount, item.ProductAmount)))
 		}
 		return name
 	case item.Note != "":
@@ -2565,12 +2567,12 @@ func (m Model) renderTodayMealPlanView() string {
 
 	var lines []string
 	lines = append(lines, fmt.Sprintf(" %s  %s",
-		ui.StyleBold.Render("Today's Meal Plan"),
+		ui.StyleBold.Render(locale.Active.TodayMealPlanHeader),
 		ui.StyleHint.Render(time.Now().Format("Mon Jan 02"))))
 	lines = append(lines, "")
 
 	if !m.mealPlanLoaded {
-		lines = append(lines, " "+ui.StyleHint.Render("Loading..."))
+		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.Loading))
 		return strings.Join(lines, "\n")
 	}
 
@@ -2582,7 +2584,7 @@ func (m Model) renderTodayMealPlanView() string {
 	}
 
 	if len(todayItems) == 0 {
-		lines = append(lines, " "+ui.StyleHint.Render("Nothing planned for today."))
+		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.NoMealsToday))
 	} else {
 		for _, item := range todayItems {
 			desc := m.mealPlanItemDesc(item)
@@ -2616,11 +2618,11 @@ func (m Model) renderTodayMealPlanView() string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, " "+ui.StyleBold.Render("This Week"))
+	lines = append(lines, " "+ui.StyleBold.Render(locale.Active.ThisWeek))
 	lines = append(lines, "")
 
 	if len(groups) == 0 {
-		lines = append(lines, " "+ui.StyleHint.Render("No more meals planned this week."))
+		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.NoMoreMealsThisWeek))
 	} else {
 		for _, g := range groups {
 			t, err := time.Parse("2006-01-02", g.day)
@@ -2628,7 +2630,7 @@ func (m Model) renderTodayMealPlanView() string {
 			if err != nil {
 				dayLabel = g.day
 			} else if g.day == tomorrow {
-				dayLabel = "Tomorrow " + t.Format("Jan 02")
+				dayLabel = fmt.Sprintf(locale.Active.FmtTomorrowLabel, t.Format("Jan 02"))
 			} else {
 				dayLabel = t.Format("Mon Jan 02")
 			}
@@ -2648,7 +2650,7 @@ func (m Model) renderTodayMealPlanView() string {
 			}
 			extra := ""
 			if extraCount > 0 {
-				extra = ui.StyleHint.Render(fmt.Sprintf(" +%d more", extraCount))
+				extra = ui.StyleHint.Render(fmt.Sprintf(" "+locale.Active.FmtMoreItems, extraCount))
 			}
 			if firstDesc != "" {
 				lines = append(lines, fmt.Sprintf("   %s  %s%s",
@@ -2664,15 +2666,15 @@ func (m Model) renderTodayMealPlanView() string {
 
 func (m Model) renderRecipeListView(bodyH int) string {
 	var lines []string
-	lines = append(lines, " "+ui.StyleBold.Render("Recipes"))
+	lines = append(lines, " "+ui.StyleBold.Render(locale.Active.RecipesHeader))
 	lines = append(lines, "")
 
 	if !m.recipeListLoaded {
-		lines = append(lines, " "+ui.StyleHint.Render("Loading..."))
+		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.Loading))
 		return strings.Join(lines, "\n")
 	}
 	if len(m.recipeList) == 0 {
-		lines = append(lines, " "+ui.StyleHint.Render("No recipes found."))
+		lines = append(lines, " "+ui.StyleHint.Render(locale.Active.NoRecipes))
 		return strings.Join(lines, "\n")
 	}
 
@@ -2689,12 +2691,12 @@ func (m Model) renderRecipeListView(bodyH int) string {
 			case f.NeedFulfilledWithShoppingList:
 				statusIcon = ui.StyleWarning.Render("~")
 				if f.MissingProductsCount > 0 {
-					missingStr = "  " + ui.StyleHint.Render(fmt.Sprintf("(%d missing)", f.MissingProductsCount))
+					missingStr = "  " + ui.StyleHint.Render(fmt.Sprintf(locale.Active.FmtMissingIngredients, f.MissingProductsCount))
 				}
 			default:
 				statusIcon = ui.StyleError.Render("✗")
 				if f.MissingProductsCount > 0 {
-					missingStr = "  " + ui.StyleHint.Render(fmt.Sprintf("(%d missing)", f.MissingProductsCount))
+					missingStr = "  " + ui.StyleHint.Render(fmt.Sprintf(locale.Active.FmtMissingIngredients, f.MissingProductsCount))
 				}
 			}
 		} else {
@@ -2738,34 +2740,34 @@ func (m Model) renderProductInfo() string {
 	var lines []string
 
 	if m.currentUPC != "" {
-		lines = append(lines, fmt.Sprintf(" %s %s", ui.StyleBold.Render("UPC:"), m.currentUPC))
+		lines = append(lines, fmt.Sprintf(" %s %s", ui.StyleBold.Render(locale.Active.LabelUPC), m.currentUPC))
 	}
 
 	if m.isNewProduct {
-		lines = append(lines, " "+ui.StyleWarning.Render("NEW PRODUCT"))
+		lines = append(lines, " "+ui.StyleWarning.Render(locale.Active.NewProductBadge))
 	} else if m.currentProduct != nil {
-		lines = append(lines, " "+ui.StyleSuccess.Render("✓ Found in Grocy"))
+		lines = append(lines, " "+ui.StyleSuccess.Render(locale.Active.FoundInGrocy))
 		lines = append(lines, fmt.Sprintf(" %s %s  %s",
-			ui.StyleLabel.Render("Product:"),
+			ui.StyleLabel.Render(locale.Active.LabelProduct),
 			m.currentProduct.Name,
-			ui.StyleHint.Render(fmt.Sprintf("[id:%d]", m.currentProduct.ID))))
+			ui.StyleHint.Render(fmt.Sprintf(locale.Active.FmtProductIDHint, m.currentProduct.ID))))
 		if m.stockInfo != nil {
 			lines = append(lines, fmt.Sprintf(" %s %g",
-				ui.StyleLabel.Render("In stock:"),
+				ui.StyleLabel.Render(locale.Active.LabelInStock),
 				m.stockInfo.StockAmount))
 		}
 		if m.currentProduct.DefaultBestBeforeDays > 0 {
-			lines = append(lines, fmt.Sprintf(" %s %d days",
-				ui.StyleLabel.Render("Shelf life:"),
+			lines = append(lines, fmt.Sprintf(" %s "+locale.Active.FmtDays,
+				ui.StyleLabel.Render(locale.Active.LabelShelfLife),
 				m.currentProduct.DefaultBestBeforeDays))
 		}
 	}
 
 	if m.offInfo != nil && m.offInfo.Name != "" {
 		lines = append(lines, fmt.Sprintf(" %s %s  %s",
-			ui.StyleLabel.Render("OFF:"),
+			ui.StyleLabel.Render(locale.Active.LabelOFF),
 			m.offInfo.Name,
-			ui.StyleHint.Render("(Open Food Facts)")))
+			ui.StyleHint.Render(locale.Active.OpenFoodFacts)))
 		if m.offInfo.Categories != "" {
 			cats := []rune(m.offInfo.Categories)
 			display := string(cats)
@@ -2773,12 +2775,12 @@ func (m Model) renderProductInfo() string {
 				display = string(cats[:57]) + "..."
 			}
 			lines = append(lines, fmt.Sprintf(" %s %s",
-				ui.StyleLabel.Render("Categories:"),
+				ui.StyleLabel.Render(locale.Active.LabelCategories),
 				display))
 		}
 		if m.offInfo.ShelfLifeDays != nil {
-			lines = append(lines, fmt.Sprintf(" %s %d days",
-				ui.StyleLabel.Render("Shelf life:"),
+			lines = append(lines, fmt.Sprintf(" %s "+locale.Active.FmtDays,
+				ui.StyleLabel.Render(locale.Active.LabelShelfLife),
 				*m.offInfo.ShelfLifeDays))
 		}
 	}

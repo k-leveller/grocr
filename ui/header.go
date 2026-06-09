@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/k-leveller/grocr/locale"
 )
 
 func RenderHeader(mode string, width int) string {
@@ -13,14 +14,14 @@ func RenderHeader(mode string, width int) string {
 	var modeBadge string
 	switch mode {
 	case "add":
-		modeBadge = StyleModeAdd.Render("[ADD]")
+		modeBadge = StyleModeAdd.Render(locale.Active.ModeAdd)
 	case "consume":
-		modeBadge = StyleModeConsume.Render("[EAT]")
+		modeBadge = StyleModeConsume.Render(locale.Active.ModeConsume)
 	default:
-		modeBadge = StyleModeLookup.Render("[LOOK]")
+		modeBadge = StyleModeLookup.Render(locale.Active.ModeLookup)
 	}
 
-	hints := StyleHint.Render("q:quit m:mode /:search ^N:new ?:help")
+	hints := StyleHint.Render(locale.Active.HeaderHints)
 
 	left := fmt.Sprintf(" %s %s", title, modeBadge)
 	right := fmt.Sprintf("%s ", hints)
