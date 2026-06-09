@@ -24,10 +24,10 @@ type Search struct {
 	Cancelled     bool
 	MaxResults    int
 	StockAmounts  map[int]float64
-	LookupMode    bool
+	DimZeroStock  bool // grey out zero-stock product names (lookup and consume modes)
 }
 
-func NewSearch(products []api.Product, locations []api.Location, quantityUnits []api.QuantityUnit, stockAmounts map[int]float64, lookupMode bool) Search {
+func NewSearch(products []api.Product, locations []api.Location, quantityUnits []api.QuantityUnit, stockAmounts map[int]float64, dimZeroStock bool) Search {
 	ti := textinput.New()
 	ti.Placeholder = locale.Active.SearchPlaceholder
 	ti.Focus()
@@ -40,7 +40,7 @@ func NewSearch(products []api.Product, locations []api.Location, quantityUnits [
 		QuantityUnits: quantityUnits,
 		MaxResults:    10,
 		StockAmounts:  stockAmounts,
-		LookupMode:    lookupMode,
+		DimZeroStock:  dimZeroStock,
 	}
 }
 
@@ -124,7 +124,8 @@ func (s *Search) filter() {
 		results = append(results, p)
 	}
 
-	if s.LookupMode && s.StockAmounts != nil {
+	// Zero-stock items always sort below in-stock items.
+	if s.StockAmounts != nil {
 		sort.SliceStable(results, func(i, j int) bool {
 			return s.StockAmounts[results[i].ID] > 0 && s.StockAmounts[results[j].ID] <= 0
 		})
@@ -201,7 +202,7 @@ func (s *Search) View() string {
 			}
 			name := p.Name
 			zeroStock := s.StockAmounts != nil && s.StockAmounts[p.ID] <= 0
-			if s.LookupMode && zeroStock {
+			if s.DimZeroStock && zeroStock {
 				name = StyleHint.Render(name)
 			}
 
