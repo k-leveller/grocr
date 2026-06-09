@@ -2,6 +2,16 @@
 
 A terminal UI for scanning barcodes into [Grocy](https://grocy.info/) inventory. Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
+## Screenshots
+
+**Add product form** — after a barcode scan, fill in expiry, location, quantity, and price:
+
+![Terminal form showing product name, expiry date, location, quantity, and price fields](docs/grocr-1.png)
+
+**Product search** — press `/` to find products by name:
+
+![Terminal search results listing products with stock quantity and location](docs/grocr-2.png)
+
 ## Compatibility
 
 Tested against **Grocy 4.6.0**. Other recent versions will likely work, but 4.6.0 is the reference version used during development.
