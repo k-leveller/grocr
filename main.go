@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/k-leveller/grocr/api"
 	"github.com/k-leveller/grocr/config"
+	"github.com/k-leveller/grocr/keybind"
 	"github.com/k-leveller/grocr/locale"
 	"github.com/k-leveller/grocr/logger"
 )
@@ -21,6 +22,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Warning: could not initialize syslog: %v\n", err)
 	}
 	defer logger.Close()
+
+	// Keybinds always load: a missing or corrupt file falls back to the
+	// built-in defaults.
+	keybind.Load()
 
 	var grocy *api.GrocyClient
 	if !*testMode {

@@ -5,7 +5,9 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/k-leveller/grocr/api"
+	"github.com/k-leveller/grocr/keybind"
 )
 
 // ---- resolveExpiry ----
@@ -174,9 +176,9 @@ func TestParseQuantity(t *testing.T) {
 		{"1", 1},
 		{"2.5", 2.5},
 		{"", 1},
-		{"0", 1},    // zero → defaults to 1
-		{"-1", 1},   // negative → defaults to 1
-		{"abc", 1},  // invalid → defaults to 1
+		{"0", 1},   // zero → defaults to 1
+		{"-1", 1},  // negative → defaults to 1
+		{"abc", 1}, // invalid → defaults to 1
 		{"  3  ", 3},
 	}
 	for _, tc := range tests {
@@ -284,14 +286,14 @@ func TestResolveQuantityUnit(t *testing.T) {
 		input string
 		want  int
 	}{
-		{"1", 1},      // 1-based index → Piece
-		{"2", 2},      // 1-based index → Oz
-		{"Piece", 1},  // exact name
-		{"Oz", 2},     // exact name
-		{"k", 3},      // prefix match (Kg)
-		{"", 1},       // empty → default QuID
-		{"99", 1},     // out of range → default QuID
-		{"xyz", 1},    // no match → default QuID
+		{"1", 1},     // 1-based index → Piece
+		{"2", 2},     // 1-based index → Oz
+		{"Piece", 1}, // exact name
+		{"Oz", 2},    // exact name
+		{"k", 3},     // prefix match (Kg)
+		{"", 1},      // empty → default QuID
+		{"99", 1},    // out of range → default QuID
+		{"xyz", 1},   // no match → default QuID
 	}
 	for _, tc := range tests {
 		got := m.resolveQuantityUnit(tc.input)
@@ -481,6 +483,136 @@ func TestHTMLToLines(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ---- keybind dispatch ----
+
+// keyMsg builds the KeyMsg bubbletea reports for a plain character key.
+func keyMsg(s string) tea.KeyMsg {
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
+}
+
+// withKeybinds installs a keybind file for the duration of a test.
+func withKeybinds(t *testing.T, src string) {
+	t.Helper()
+	orig := keybind.Active
+	t.Cleanup(func() { keybind.Active = orig })
+	keybind.Active = keybind.Parse(src)
+}
+
+func TestIdleKeyUsesCustomModeBinding(t *testing.T) {
+	withKeybinds(t, "mode = M\n")
+
+	m := NewModel(nil, nil, true)
+	next, _ := m.handleIdleKey(keyMsg("M"))
+	if got := next.(Model).mode; got != "consume" {
+		t.Errorf("mode after rebound key = %q, want consume", got)
+	}
+
+	// The default binding no longer toggles; it types into the UPC field.
+	m2 := NewModel(nil, nil, true)
+	next2, _ := m2.handleIdleKey(keyMsg("m"))
+	if got := next2.(Model).mode; got != "add" {
+		t.Errorf("mode after old key = %q, want add", got)
+	}
+}
+
+func TestIdleKeyUsesCustomSearchBinding(t *testing.T) {
+	withKeybinds(t, "search = s\n")
+
+	m := NewModel(nil, nil, true)
+	next, _ := m.handleIdleKey(keyMsg("s"))
+	if got := next.(Model).state; got != StateSearch {
+		t.Errorf("state after rebound search key = %v, want StateSearch", got)
+	}
+}
+
+func TestIdleKeyCustomBindingIgnoredWhileTyping(t *testing.T) {
+	withKeybinds(t, "mode = M\n")
+
+	m := NewModel(nil, nil, true)
+	m.input.SetValue("123")
+	next, _ := m.handleIdleKey(keyMsg("M"))
+	if got := next.(Model).mode; got != "add" {
+		t.Errorf("mode changed while the input held a value: %q", got)
+	}
+}
+
+func TestLookupViewKeyUsesCustomBindings(t *testing.T) {
+	withKeybinds(t, "notes = N\ntransfer = T\n")
+
+	m := NewModel(nil, nil, true)
+	m.state = StateLookupView
+	m.currentProduct = &api.Product{ID: 1, Name: "Beans"}
+
+	next, _ := m.handleLookupViewKey(keyMsg("N"))
+	if got := next.(Model).state; got != StateEditNotes {
+		t.Errorf("state after rebound notes key = %v, want StateEditNotes", got)
+	}
+
+	next, _ = m.handleLookupViewKey(keyMsg("t"))
+	if got := next.(Model).state; got != StateLookupView {
+		t.Errorf("old transfer key still fired: state = %v", got)
+	}
+}
+
+func TestUnknownBarcodeKeyUsesCustomBindings(t *testing.T) {
+	withKeybinds(t, "link = L\n")
+
+	m := NewModel(nil, nil, true)
+	m.state = StateUnknownBarcode
+
+	next, _ := m.handleUnknownBarcodeKey(keyMsg("L"))
+	if got := next.(Model).state; got != StateSearch {
+		t.Errorf("state after rebound link key = %v, want StateSearch", got)
+	}
+	if !next.(Model).linkBarcode {
+		t.Error("linkBarcode was not set")
+	}
+}
+
+func TestExpiringDetailKeepsArrowAliases(t *testing.T) {
+	withKeybinds(t, "up = w\ndown = s\n")
+
+	m := NewModel(nil, nil, true)
+	m.state = StateExpiringDetail
+	m.expiringSoon = []api.ExpiringItem{{ProductID: 1}, {ProductID: 2}}
+
+	next, _ := m.handleExpiringDetailKey(tea.KeyMsg{Type: tea.KeyDown})
+	if got := next.(Model).expPanelCursor; got != 1 {
+		t.Errorf("arrow key stopped working: cursor = %d, want 1", got)
+	}
+
+	next, _ = m.handleExpiringDetailKey(keyMsg("s"))
+	if got := next.(Model).expPanelCursor; got != 1 {
+		t.Errorf("rebound down key: cursor = %d, want 1", got)
+	}
+
+	next, _ = m.handleExpiringDetailKey(keyMsg("j"))
+	if got := next.(Model).expPanelCursor; got != 0 {
+		t.Errorf("old down key still fired: cursor = %d, want 0", got)
+	}
+}
+
+func TestIdleArrowsWorkWhenBoundToActions(t *testing.T) {
+	// Binding an action to an arrow key must not disable the arrow's own
+	// UPC-history behaviour.
+	withKeybinds(t, "up = up\ndown = down\n")
+
+	m := NewModel(nil, nil, true)
+	m.upcHistory = []string{"111", "222"}
+
+	next, _ := m.handleIdleKey(tea.KeyMsg{Type: tea.KeyUp})
+	got := next.(Model)
+	if got.historyPos != 0 || got.input.Value() != "111" {
+		t.Fatalf("up arrow did not recall history: pos=%d value=%q", got.historyPos, got.input.Value())
+	}
+
+	next, _ = got.handleIdleKey(tea.KeyMsg{Type: tea.KeyDown})
+	got = next.(Model)
+	if got.historyPos != -1 || got.input.Value() != "" {
+		t.Errorf("down arrow did not leave history: pos=%d value=%q", got.historyPos, got.input.Value())
 	}
 }
 

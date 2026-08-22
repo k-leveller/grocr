@@ -21,7 +21,7 @@ func RenderHeader(mode string, width int) string {
 		modeBadge = StyleModeLookup.Render(locale.Active.ModeLookup)
 	}
 
-	hints := StyleHint.Render(locale.Active.HeaderHints)
+	hints := StyleHint.Render(HeaderHints())
 
 	left := fmt.Sprintf(" %s %s", title, modeBadge)
 	right := fmt.Sprintf("%s ", hints)
