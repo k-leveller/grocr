@@ -6,7 +6,7 @@ This app is meant to serve as a low-friction way to enter grocery item informati
 
 ## Screenshots
 
-**Add product form** — after a barcode scan, fill in expiry, location, quantity, and price:
+**Add product form** — after a barcode scan, optionally fill in expiry, location, quantity, and price:
 
 ![Terminal form showing product name, expiry date, location, quantity, and price fields](docs/grocr-1.png)
 
