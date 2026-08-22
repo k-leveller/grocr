@@ -615,3 +615,39 @@ func TestIdleArrowsWorkWhenBoundToActions(t *testing.T) {
 		t.Errorf("down arrow did not leave history: pos=%d value=%q", got.historyPos, got.input.Value())
 	}
 }
+
+// ---- recipeDetailMaxScroll ----
+
+func TestRecipeDetailMaxScroll(t *testing.T) {
+	makeLines := func(n int) []string {
+		lines := make([]string, n)
+		for i := range lines {
+			lines[i] = "line"
+		}
+		return lines
+	}
+
+	tests := []struct {
+		name   string
+		height int
+		nLines int
+		want   int
+	}{
+		// height 24 → bodyH 20 → 18 visible description lines
+		{name: "content fits, no scroll", height: 24, nLines: 10, want: 0},
+		{name: "content exactly fills", height: 24, nLines: 18, want: 0},
+		{name: "one line overflow", height: 24, nLines: 19, want: 1},
+		{name: "large overflow", height: 24, nLines: 50, want: 32},
+		{name: "empty description", height: 24, nLines: 0, want: 0},
+		{name: "tiny terminal clamps visible to one", height: 0, nLines: 5, want: 4},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m := Model{height: tc.height, recipeDetailLines: makeLines(tc.nLines)}
+			if got := m.recipeDetailMaxScroll(); got != tc.want {
+				t.Errorf("recipeDetailMaxScroll() with height=%d, %d lines = %d, want %d",
+					tc.height, tc.nLines, got, tc.want)
+			}
+		})
+	}
+}

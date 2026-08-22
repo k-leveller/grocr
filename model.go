@@ -1057,10 +1057,15 @@ func (m Model) handleRecipeDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = StateRecipeList
 		return m, nil
 	case key == "down" || keybind.Is(keybind.Down, key):
-		if m.recipeDetailScroll < len(m.recipeDetailLines)-1 {
+		if m.recipeDetailScroll < m.recipeDetailMaxScroll() {
 			m.recipeDetailScroll++
 		}
 	case key == "up" || keybind.Is(keybind.Up, key):
+		// A resize can shrink the max while we're scrolled past it; snap back
+		// so the first press moves the page instead of unwinding dead scroll.
+		if maxScroll := m.recipeDetailMaxScroll(); m.recipeDetailScroll > maxScroll {
+			m.recipeDetailScroll = maxScroll
+		}
 		if m.recipeDetailScroll > 0 {
 			m.recipeDetailScroll--
 		}
@@ -1068,6 +1073,30 @@ func (m Model) handleRecipeDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// recipeDetailMaxScroll returns the largest scroll offset that still changes
+// what renderRecipeDetailView displays. Keeping the scroll position within
+// this bound means every up/down press moves the page immediately, instead
+// of accumulating invisible scroll past the end of the description.
+// The layout math mirrors View (4 fixed chrome lines) and
+// renderRecipeDetailView (2 header lines: recipe name + blank).
+func (m Model) recipeDetailMaxScroll() int {
+	bodyH := m.height - 4
+	if bodyH < 1 {
+		bodyH = 1
+	}
+	maxVisible := bodyH - 2
+	if maxVisible < 1 {
+		maxVisible = 1
+	}
+	maxScroll := len(m.recipeDetailLines) - maxVisible
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	return maxScroll
+}
+
+// recipeScore returns a sort key: 0=fulfillable, 1=fulfillable with shopping list,
+// 2=no fulfillment data, 3=not fulfillable.
 func recipeScore(f api.RecipeFulfillment, hasData bool) int {
 	if !hasData {
 		return 2
@@ -2299,7 +2328,7 @@ func (m Model) View() string {
 	}
 
 	var body string
-	if m.width >= expPanelMinWidth {
+	if m.width >= expPanelMinWidth && m.state != StateRecipeDetail {
 		mainW := m.width - expPanelWidth - 1
 		mainContent := m.renderMainContent(mainW, bodyH)
 		panelContent := m.renderExpiringSoonPanel(bodyH)
@@ -2578,7 +2607,7 @@ func (m Model) renderExpiringSoonPanel(bodyH int) string {
 		}
 
 		prefix := " "
-		if i == m.expPanelCursor {
+		if i == m.expPanelCursor && m.state != StateRecipeList {
 			prefix = ui.StyleWarning.Render(">")
 		}
 		lines = append(lines, prefix+name+" "+daysStyle.Render(daysText))
