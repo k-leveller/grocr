@@ -2,6 +2,8 @@
 // To add a new language, define a new Strings value and register it in Load.
 package locale
 
+import "github.com/k-leveller/grocr/keybind"
+
 // Strings holds every user-facing string in the application.
 // Fields named FmtXxx are Go format strings; the comment on each field lists the
 // positional arguments expected by fmt.Sprintf.
@@ -52,20 +54,22 @@ type Strings struct {
 	ModeAdd     string // badge shown in add mode
 	ModeConsume string // badge shown in consume mode
 	ModeLookup  string // badge shown in lookup mode
-	HeaderHints string // key-binding hint line in header
+	HeaderHints string // %s = quit, mode, search, new and help keys
 
 	// ── Input line hints ───────────────────────────────────────────────────────
-	HintLookupView    string
-	HintTransfer      string
-	HintPriceHistory  string
-	HintMealPlan      string
-	HintTodayMealPlan string
-	HintRecipeList    string
-	HintRecipeDetail  string
-	HintEditNotes     string
-	HintYesNo          string
-	HintUnknownBarcode string
-	HintExpiringDetail string
+	// Hints that mention rebindable keys are format strings; the arguments are
+	// key symbols supplied by ui.Hint* (see ui/hints.go).
+	HintLookupView     string // %s = notes, price history, transfer keys
+	HintTransfer       string
+	HintPriceHistory   string // %s = up, down, price history keys
+	HintMealPlan       string // %s = up, down, refresh, quit keys
+	HintTodayMealPlan  string // %s = refresh, quit keys
+	HintRecipeList     string // %s = up, down, search, right (with arrow), refresh, quit keys
+	HintRecipeDetail   string // %s = up, down, left (with arrow), quit keys
+	HintEditNotes      string
+	HintYesNo          string // %s = yes key
+	HintUnknownBarcode string // %s = create, link keys
+	HintExpiringDetail string // %s = left (with arrow), down, up keys
 
 	// ── Form ───────────────────────────────────────────────────────────────────
 	FormNavHint         string // navigation hint shown below every form
@@ -183,10 +187,14 @@ type Strings struct {
 	LogAddExpiry  string // %s = date string
 
 	// ── Help overlay ──────────────────────────────────────────────────────────
-	HelpTitle               string
-	HelpBody                string // multi-line keyboard shortcut descriptions
+	HelpTitle string
+	// HelpDescs describes each rebindable action; the key column is rendered
+	// from the active keybinds. Missing entries are skipped.
+	HelpDescs map[keybind.Action]string
+	// HelpStaticBody lists the shortcuts that cannot be rebound.
+	HelpStaticBody          string
 	HelpUnknownBarcodeTitle string
-	HelpUnknownBarcodeBody  string // multi-line unknown-barcode action descriptions
+	HelpUnknownBarcodeBody  string // %s = create key, %s = link key
 }
 
 // English is the built-in English locale.
@@ -237,20 +245,20 @@ var English = Strings{
 	ModeAdd:     "[ADD]",
 	ModeConsume: "[EAT]",
 	ModeLookup:  "[LOOK]",
-	HeaderHints: "q:quit m:mode /:search n:new ?:help",
+	HeaderHints: "%s:quit %s:mode %s:search %s:new %s:help",
 
 	// Input line hints
-	HintLookupView:     "n = notes  •  p = price history  •  t = transfer  •  Esc/Enter = dismiss",
+	HintLookupView:     "%s = notes  •  %s = price history  •  %s = transfer  •  Esc/Enter = dismiss",
 	HintTransfer:       "Tab/↓ next field  •  Enter submit  •  Esc cancel",
-	HintPriceHistory:   "↑/↓/j/k = navigate  •  Esc/p = back",
-	HintMealPlan:       "↑/↓/j/k = scroll  •  r = refresh  •  Esc/q = back",
-	HintTodayMealPlan:  "r = refresh  •  Esc/q = back",
-	HintRecipeList:     "↑/↓/j/k = navigate  •  / = search  •  Enter/→ = view  •  r = refresh  •  Esc/q = back",
-	HintRecipeDetail:   "↑/↓/j/k = scroll  •  ←/h/q/Esc = back",
+	HintPriceHistory:   "↑/↓/%s/%s = navigate  •  Esc/%s = back",
+	HintMealPlan:       "↑/↓/%s/%s = scroll  •  %s = refresh  •  Esc/%s = back",
+	HintTodayMealPlan:  "%s = refresh  •  Esc/%s = back",
+	HintRecipeList:     "↑/↓/%s/%s = navigate  •  %s = search  •  Enter/%s = view  •  %s = refresh  •  Esc/%s = back",
+	HintRecipeDetail:   "↑/↓/%s/%s = scroll  •  %s/%s/Esc = back",
 	HintEditNotes:      "Enter to save  •  Esc to cancel",
-	HintYesNo:          "y = yes, any other key = no",
-	HintUnknownBarcode: "C/Enter = create new  •  L = link existing  •  Esc = cancel",
-	HintExpiringDetail: "← / Esc = back  •  j/k = navigate",
+	HintYesNo:          "%s = yes, any other key = no",
+	HintUnknownBarcode: "%s/Enter = create new  •  %s = link existing  •  Esc = cancel",
+	HintExpiringDetail: "%s / Esc = back  •  %s/%s = navigate",
 
 	// Form
 	FormNavHint:         "Tab/↓ to navigate fields, Enter to submit, Esc to cancel",
@@ -273,7 +281,7 @@ var English = Strings{
 	SearchHeader:  "Search:",
 	AllLocations:  "all locations",
 	NoMatches:     "No matches",
-	SearchNavHint: "↑/↓ navigate · Tab filter location · Enter select · n new · Esc cancel",
+	SearchNavHint: "↑/↓ navigate · Tab filter location · Enter select · %s new · Esc cancel",
 
 	// Expiring soon panel
 	ExpiringSoonHeader:   "Expiring Soon",
@@ -322,12 +330,12 @@ var English = Strings{
 	// Shopping list prompt
 	ConsumedLabel:      "Consumed:",
 	StockNowZero:       "Stock is now zero.",
-	ShoppingListPrompt: "Add to shopping list? [y/N]",
+	ShoppingListPrompt: "Add to shopping list? [%s/N]",
 
 	// Unknown barcode
 	UnknownBarcodePrompt: "Unknown barcode — what would you like to do?",
-	UnknownBarcodeCreate: "  [C] / Enter  Create a new product",
-	UnknownBarcodeLink:   "  [L]          Link to an existing product",
+	UnknownBarcodeCreate: "  [%s] / Enter  Create a new product",
+	UnknownBarcodeLink:   "  [%s]          Link to an existing product",
 
 	// Price history
 	PriceHistoryHeader: "Price History:",
@@ -366,24 +374,29 @@ var English = Strings{
 
 	// Help overlay
 	HelpTitle: "Keyboard Shortcuts",
-	HelpBody: "" +
-		"  q       Quit\n" +
-		"  m       Toggle Add/Consume mode\n" +
-		"  /       Search products by name\n" +
-		"  n       New product (no barcode)\n" +
-		"  x       Export stock to CSV\n" +
-		"  t       Today's meal plan (compact)\n" +
-		"  P       Meal plan (next 7 days, scrollable)\n" +
-		"  r       Recipe list (fulfillability), Enter/→ to view details\n" +
-		"  e       Edit product name\n" +
-		"  p       Price history (lookup view)\n" +
-		"  t       Transfer stock between locations (lookup view)\n" +
-		"  ?       Toggle this help\n" +
-		"  ↑/k     Older UPC history entry (or expiry panel up when no history)\n" +
-		"  ↓/j     Newer UPC history entry (or expiry panel down)\n" +
-		"  c       Mark as consumed (expiring-soon panel)\n" +
-		"  d       Mark as spoiled (expiring-soon panel)\n" +
-		"  →/l     Open item details (expiring-soon panel)\n" +
+	HelpDescs: map[keybind.Action]string{
+		keybind.Quit:          "Quit",
+		keybind.Mode:          "Cycle Add / Consume / Lookup mode",
+		keybind.Search:        "Search products by name",
+		keybind.NewProduct:    "New product (no barcode)",
+		keybind.Export:        "Export stock to CSV",
+		keybind.MealPlanToday: "Today's meal plan (compact)",
+		keybind.MealPlan:      "Meal plan (next 7 days, scrollable)",
+		keybind.Recipes:       "Recipe list (fulfillability), Enter/→ to view details",
+		keybind.EditName:      "Edit product name",
+		keybind.Notes:         "Edit notes (lookup view)",
+		keybind.PriceHistory:  "Price history (lookup view)",
+		keybind.Transfer:      "Transfer stock between locations (lookup view)",
+		keybind.Help:          "Toggle this help",
+		keybind.Up:            "Older UPC history entry (or expiry panel up when no history)",
+		keybind.Down:          "Newer UPC history entry (or expiry panel down)",
+		keybind.Consume:       "Mark as consumed (expiring-soon panel)",
+		keybind.Spoil:         "Mark as spoiled (expiring-soon panel)",
+		keybind.Refresh:       "Reload the current panel",
+		keybind.Right:         "Open item details (expiring-soon panel)",
+		keybind.Left:          "Go back",
+	},
+	HelpStaticBody: "" +
 		"  Tab/↓   Next field (form)\n" +
 		"  S-Tab/↑ Previous field (form)\n" +
 		"  Enter   Submit form\n" +
@@ -391,8 +404,8 @@ var English = Strings{
 		"  Ctrl+C  Quit\n\n",
 	HelpUnknownBarcodeTitle: "Unknown Barcode",
 	HelpUnknownBarcodeBody: "" +
-		"  C/Enter  Create a new product for this barcode\n" +
-		"  L        Link barcode to an existing product (rebrand/repackage)\n",
+		"  %s/Enter  Create a new product for this barcode\n" +
+		"  %s        Link barcode to an existing product (rebrand/repackage)\n",
 }
 
 // Active is the locale used at runtime. It is set by Load and defaults to English.

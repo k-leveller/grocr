@@ -233,7 +233,7 @@ func (s *Search) View() string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, " "+StyleHint.Render(locale.Active.SearchNavHint))
+	lines = append(lines, " "+StyleHint.Render(SearchNavHint()))
 
 	return strings.Join(lines, "\n")
 }

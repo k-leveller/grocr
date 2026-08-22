@@ -16,6 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/k-leveller/grocr/api"
+	"github.com/k-leveller/grocr/keybind"
 	"github.com/k-leveller/grocr/locale"
 	"github.com/k-leveller/grocr/logger"
 	"github.com/k-leveller/grocr/scanner"
@@ -615,7 +616,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Help toggle works in any state
-	if key == "?" && m.state == StateIdle {
+	if keybind.Is(keybind.Help, key) && m.state == StateIdle {
 		m.showHelp = !m.showHelp
 		return m, nil
 	}
@@ -667,8 +668,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
-	switch key {
-	case "esc":
+	switch {
+	case key == "esc":
 		if m.loading {
 			m.loading = false
 			m.lookupSeq++  // invalidate the in-flight lookup
@@ -678,29 +679,20 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusErr = false
 			return m, m.input.Focus()
 		}
-	case "q":
+	case keybind.Is(keybind.Quit, key):
 		if m.input.Value() == "" {
 			return m, tea.Quit
 		}
-	case "j":
+	case keybind.Is(keybind.Down, key):
 		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
 			m.expPanelCursor = min(m.expPanelCursor+1, len(m.expiringSoon)-1)
 			return m, nil
 		}
 		if m.historyPos >= 0 {
-			next := m.historyPos - 1
-			if next < 0 {
-				m.input.SetValue(m.historySave)
-				m.input.CursorEnd()
-				m.historyPos = -1
-			} else {
-				m.historyPos = next
-				m.input.SetValue(m.upcHistory[next])
-				m.input.CursorEnd()
-			}
+			m.historyNewer()
 			return m, nil
 		}
-	case "k":
+	case keybind.Is(keybind.Up, key):
 		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
 			m.expPanelCursor = max(m.expPanelCursor-1, 0)
 			return m, nil
@@ -714,7 +706,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-	case "up":
+	case key == "up":
 		if len(m.upcHistory) > 0 {
 			next := m.historyPos + 1
 			if next < len(m.upcHistory) {
@@ -731,63 +723,30 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.expPanelCursor = max(m.expPanelCursor-1, 0)
 			return m, nil
 		}
-	case "down":
+	case key == "down":
 		if m.historyPos >= 0 {
-			next := m.historyPos - 1
-			if next < 0 {
-				m.input.SetValue(m.historySave)
-				m.input.CursorEnd()
-				m.historyPos = -1
-			} else {
-				m.historyPos = next
-				m.input.SetValue(m.upcHistory[next])
-				m.input.CursorEnd()
-			}
+			m.historyNewer()
 			return m, nil
 		}
 		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
 			m.expPanelCursor = min(m.expPanelCursor+1, len(m.expiringSoon)-1)
 			return m, nil
 		}
-	case "c":
+	case keybind.Is(keybind.Consume, key):
 		if !m.loading && m.input.Value() == "" && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
-			item := m.expiringSoon[m.expPanelCursor]
-			var product *api.Product
-			for i := range m.allProducts {
-				if m.allProducts[i].ID == item.ProductID {
-					product = &m.allProducts[i]
-					break
-				}
-			}
-			m.currentProduct = product
-			m.loading = true
-			m.statusMsg = ""
-			m.consumeSeq++
-			return m, m.loadConsumeStock(m.consumeSeq, item.ProductID, item.ProductName, false)
+			return m.consumeExpiringItem(false)
 		}
-	case "d":
+	case keybind.Is(keybind.Spoil, key):
 		if !m.loading && m.input.Value() == "" && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
-			item := m.expiringSoon[m.expPanelCursor]
-			var product *api.Product
-			for i := range m.allProducts {
-				if m.allProducts[i].ID == item.ProductID {
-					product = &m.allProducts[i]
-					break
-				}
-			}
-			m.currentProduct = product
-			m.loading = true
-			m.statusMsg = ""
-			m.consumeSeq++
-			return m, m.loadConsumeStock(m.consumeSeq, item.ProductID, item.ProductName, true)
+			return m.consumeExpiringItem(true)
 		}
-	case "right", "l":
+	case key == "right" || keybind.Is(keybind.Right, key):
 		if m.input.Value() == "" && m.width >= expPanelMinWidth && m.expPanelCursor >= 0 && m.expPanelCursor < len(m.expiringSoon) {
 			m.state = StateExpiringDetail
 			m.input.Blur()
 			return m, nil
 		}
-	case "m":
+	case keybind.Is(keybind.Mode, key):
 		if m.input.Value() == "" {
 			switch m.mode {
 			case "add":
@@ -799,7 +758,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-	case "/":
+	case keybind.Is(keybind.Search, key):
 		if m.input.Value() == "" {
 			m.state = StateSearch
 			var locs []api.Location
@@ -812,18 +771,18 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.input.Blur()
 			return m, nil
 		}
-	case "x":
+	case keybind.Is(keybind.Export, key):
 		if m.input.Value() == "" {
 			m.loading = true
 			m.statusMsg = ""
 			return m, m.doExport()
 		}
-	case "n":
+	case keybind.Is(keybind.NewProduct, key):
 		if m.input.Value() == "" {
 			m.historyPos = -1
 			return m.startManualProductEntry()
 		}
-	case "r":
+	case keybind.Is(keybind.Recipes, key):
 		if m.input.Value() == "" {
 			m.state = StateRecipeList
 			m.recipeListLoaded = false
@@ -836,7 +795,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.input.Blur()
 			return m, m.loadRecipeList()
 		}
-	case "P":
+	case keybind.Is(keybind.MealPlan, key):
 		if m.input.Value() == "" {
 			m.state = StateMealPlan
 			m.mealPlanLoaded = false
@@ -847,7 +806,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.loadMealPlan()
 		}
 		return m, nil
-	case "t":
+	case keybind.Is(keybind.MealPlanToday, key):
 		if m.input.Value() == "" {
 			m.state = StateTodayMealPlan
 			m.mealPlanLoaded = false
@@ -856,7 +815,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.input.Blur()
 			return m, m.loadMealPlan()
 		}
-	case "enter":
+	case key == "enter":
 		val := strings.TrimSpace(m.input.Value())
 		if val == "" {
 			return m, nil
@@ -885,16 +844,50 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// historyNewer steps one entry towards the most recent UPC, restoring the
+// in-progress input once it walks past the newest entry.
+func (m *Model) historyNewer() {
+	next := m.historyPos - 1
+	if next < 0 {
+		m.input.SetValue(m.historySave)
+		m.input.CursorEnd()
+		m.historyPos = -1
+		return
+	}
+	m.historyPos = next
+	m.input.SetValue(m.upcHistory[next])
+	m.input.CursorEnd()
+}
+
+// consumeExpiringItem starts a consume (or spoil) for the selected
+// expiring-soon entry.
+func (m Model) consumeExpiringItem(spoiled bool) (tea.Model, tea.Cmd) {
+	item := m.expiringSoon[m.expPanelCursor]
+	var product *api.Product
+	for i := range m.allProducts {
+		if m.allProducts[i].ID == item.ProductID {
+			product = &m.allProducts[i]
+			break
+		}
+	}
+	m.currentProduct = product
+	m.loading = true
+	m.statusMsg = ""
+	m.consumeSeq++
+	return m, m.loadConsumeStock(m.consumeSeq, item.ProductID, item.ProductName, spoiled)
+}
+
 func (m Model) handleExpiringDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "left", "h":
+	key := msg.String()
+	switch {
+	case key == "esc" || key == "left" || keybind.Is(keybind.Left, key):
 		m.state = StateIdle
 		return m, m.input.Focus()
-	case "j", "down":
+	case key == "down" || keybind.Is(keybind.Down, key):
 		if m.expPanelCursor < len(m.expiringSoon)-1 {
 			m.expPanelCursor++
 		}
-	case "k", "up":
+	case key == "up" || keybind.Is(keybind.Up, key):
 		if m.expPanelCursor > 0 {
 			m.expPanelCursor--
 		}
@@ -1056,15 +1049,16 @@ func (m Model) loadRecipeDetail(id int) tea.Cmd {
 }
 
 func (m Model) handleRecipeDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "q", "left", "h":
+	key := msg.String()
+	switch {
+	case key == "esc" || key == "left" || keybind.Is(keybind.Quit, key) || keybind.Is(keybind.Left, key):
 		m.state = StateRecipeList
 		return m, nil
-	case "j", "down":
+	case key == "down" || keybind.Is(keybind.Down, key):
 		if m.recipeDetailScroll < len(m.recipeDetailLines)-1 {
 			m.recipeDetailScroll++
 		}
-	case "k", "up":
+	case key == "up" || keybind.Is(keybind.Up, key):
 		if m.recipeDetailScroll > 0 {
 			m.recipeDetailScroll--
 		}
@@ -1072,8 +1066,6 @@ func (m Model) handleRecipeDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// recipeScore returns a sort key: 0=fulfillable, 1=fulfillable with shopping list,
-// 2=no fulfillment data, 3=not fulfillable.
 func recipeScore(f api.RecipeFulfillment, hasData bool) int {
 	if !hasData {
 		return 2
@@ -1088,8 +1080,10 @@ func recipeScore(f api.RecipeFulfillment, hasData bool) int {
 }
 
 func (m Model) handleRecipeListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+
 	if m.recipeFilterActive {
-		switch msg.String() {
+		switch key {
 		case "esc":
 			m.recipeFilterActive = false
 			m.recipeFilter = ""
@@ -1111,26 +1105,26 @@ func (m Model) handleRecipeListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	switch msg.String() {
-	case "esc", "q":
+	switch {
+	case key == "esc" || keybind.Is(keybind.Quit, key):
 		m.state = StateIdle
 		m.statusMsg = ""
 		m.statusErr = false
 		m.recipeFilter = ""
 		m.recipeFilterActive = false
 		return m, m.input.Focus()
-	case "/":
+	case keybind.Is(keybind.Search, key):
 		m.recipeFilterActive = true
-	case "j", "down":
+	case key == "down" || keybind.Is(keybind.Down, key):
 		filtered := m.filteredRecipes()
 		if m.recipeListCursor < len(filtered)-1 {
 			m.recipeListCursor++
 		}
-	case "k", "up":
+	case key == "up" || keybind.Is(keybind.Up, key):
 		if m.recipeListCursor > 0 {
 			m.recipeListCursor--
 		}
-	case "enter", "right", "l":
+	case key == "enter" || key == "right" || keybind.Is(keybind.Right, key):
 		if m.recipeListLoaded && len(m.recipeList) > 0 {
 			r := m.recipeList[m.recipeListCursor]
 			m.state = StateRecipeDetail
@@ -1141,7 +1135,7 @@ func (m Model) handleRecipeListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.recipeDetailSeq++
 			return m, m.loadRecipeDetail(r.ID)
 		}
-	case "r":
+	case keybind.Is(keybind.Refresh, key):
 		m.recipeListLoaded = false
 		m.recipeList = nil
 		m.recipeFulfillment = nil
@@ -1496,7 +1490,7 @@ func (m Model) handleFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleDisplayKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
-	if key == "e" {
+	if keybind.Is(keybind.EditName, key) {
 		// Enter edit name mode
 		m.state = StateEditName
 		ti := textinput.New()
@@ -1574,7 +1568,7 @@ func parseConsumeQty(val string, stock float64) (float64, error) {
 }
 
 func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if msg.String() == "n" && m.search.Input.Value() == "" {
+	if keybind.Is(keybind.NewProduct, msg.String()) && m.search.Input.Value() == "" {
 		if !m.linkBarcode {
 			return m.startManualProductEntry()
 		}
@@ -1631,12 +1625,13 @@ func (m Model) handleSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleUnknownBarcodeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "c", "enter":
+	key := msg.String()
+	switch {
+	case key == "enter" || keybind.Is(keybind.Create, key):
 		m.state = StateForm
 		m.form = m.buildNewProductForm()
 		return m, nil
-	case "l":
+	case keybind.Is(keybind.Link, key):
 		m.linkBarcode = true
 		m.state = StateSearch
 		var locs []api.Location
@@ -1647,7 +1642,7 @@ func (m Model) handleUnknownBarcodeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.search = ui.NewSearch(m.allProducts, locs, units, m.stockAmounts, false)
 		return m, nil
-	case "esc":
+	case key == "esc":
 		m.state = StateIdle
 		m.currentProduct = nil
 		m.isNewProduct = false
@@ -1727,22 +1722,23 @@ func (m Model) handleEditNameKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleLookupViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "enter":
+	key := msg.String()
+	switch {
+	case key == "esc" || key == "enter":
 		m.state = StateIdle
 		m.currentProduct = nil
 		m.offInfo = nil
 		m.stockInfo = nil
 		m.input.SetValue("")
 		return m, m.input.Focus()
-	case "p":
+	case keybind.Is(keybind.PriceHistory, key):
 		if m.currentProduct != nil {
 			m.state = StatePriceHistory
 			m.priceHistory = nil
 			m.priceHistoryCursor = 0
 			return m, m.loadPriceHistory()
 		}
-	case "n":
+	case keybind.Is(keybind.Notes, key):
 		if m.currentProduct != nil {
 			m.state = StateEditNotes
 			ti := textinput.New()
@@ -1752,7 +1748,7 @@ func (m Model) handleLookupViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			ti.Width = 60
 			m.editInput = ti
 		}
-	case "t":
+	case keybind.Is(keybind.Transfer, key):
 		if m.currentProduct != nil {
 			m.state = StateTransfer
 			m.form = m.buildTransferForm()
@@ -1795,15 +1791,16 @@ func (m Model) handleEditNotesKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handlePriceHistoryKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "enter", "p":
+	key := msg.String()
+	switch {
+	case key == "esc" || key == "enter" || keybind.Is(keybind.PriceHistory, key):
 		m.state = StateLookupView
 		return m, nil
-	case "j", "down":
+	case key == "down" || keybind.Is(keybind.Down, key):
 		if m.priceHistoryCursor < len(m.priceHistory)-1 {
 			m.priceHistoryCursor++
 		}
-	case "k", "up":
+	case key == "up" || keybind.Is(keybind.Up, key):
 		if m.priceHistoryCursor > 0 {
 			m.priceHistoryCursor--
 		}
@@ -1812,22 +1809,23 @@ func (m Model) handlePriceHistoryKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleMealPlanKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "q":
+	key := msg.String()
+	switch {
+	case key == "esc" || keybind.Is(keybind.Quit, key):
 		m.state = StateIdle
 		m.statusMsg = ""
 		m.statusErr = false
 		return m, m.input.Focus()
-	case "j", "down":
+	case key == "down" || keybind.Is(keybind.Down, key):
 		// Cap at ~3 lines per item (day header + entry + blank gap)
 		if m.mealPlanOffset < len(m.mealPlan)*3+len(m.mealPlanRecipes) {
 			m.mealPlanOffset++
 		}
-	case "k", "up":
+	case key == "up" || keybind.Is(keybind.Up, key):
 		if m.mealPlanOffset > 0 {
 			m.mealPlanOffset--
 		}
-	case "r":
+	case keybind.Is(keybind.Refresh, key):
 		m.mealPlanLoaded = false
 		m.mealPlan = nil
 		m.mealPlanRecipes = nil
@@ -1838,13 +1836,14 @@ func (m Model) handleMealPlanKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleTodayMealPlanKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "q":
+	key := msg.String()
+	switch {
+	case key == "esc" || keybind.Is(keybind.Quit, key):
 		m.state = StateIdle
 		m.statusMsg = ""
 		m.statusErr = false
 		return m, m.input.Focus()
-	case "r":
+	case keybind.Is(keybind.Refresh, key):
 		m.mealPlanLoaded = false
 		m.mealPlan = nil
 		m.mealPlanRecipes = nil
@@ -1855,7 +1854,9 @@ func (m Model) handleTodayMealPlanKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleShoppingListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var shoppingCmd tea.Cmd
-	if msg.String() == "y" || msg.String() == "Y" {
+	key := msg.String()
+	yes := keybind.Key(keybind.Yes)
+	if key == yes || key == strings.ToUpper(yes) {
 		shoppingCmd = m.addToShoppingList()
 	}
 	m.state = StateIdle
@@ -2323,27 +2324,27 @@ func (m Model) renderInputLine() string {
 	case StateIdle:
 		return " > " + m.input.View()
 	case StateLookupView:
-		return " " + ui.StyleHint.Render(locale.Active.HintLookupView)
+		return " " + ui.StyleHint.Render(ui.HintLookupView())
 	case StateTransfer:
 		return " " + ui.StyleHint.Render(locale.Active.HintTransfer)
 	case StatePriceHistory:
-		return " " + ui.StyleHint.Render(locale.Active.HintPriceHistory)
+		return " " + ui.StyleHint.Render(ui.HintPriceHistory())
 	case StateMealPlan:
-		return " " + ui.StyleHint.Render(locale.Active.HintMealPlan)
+		return " " + ui.StyleHint.Render(ui.HintMealPlan())
 	case StateTodayMealPlan:
-		return " " + ui.StyleHint.Render(locale.Active.HintTodayMealPlan)
+		return " " + ui.StyleHint.Render(ui.HintTodayMealPlan())
 	case StateRecipeList:
-		return " " + ui.StyleHint.Render(locale.Active.HintRecipeList)
+		return " " + ui.StyleHint.Render(ui.HintRecipeList())
 	case StateRecipeDetail:
-		return " " + ui.StyleHint.Render(locale.Active.HintRecipeDetail)
+		return " " + ui.StyleHint.Render(ui.HintRecipeDetail())
 	case StateEditNotes:
 		return " " + ui.StyleHint.Render(locale.Active.HintEditNotes)
 	case StateExpiringDetail:
-		return " " + ui.StyleHint.Render(locale.Active.HintExpiringDetail)
+		return " " + ui.StyleHint.Render(ui.HintExpiringDetail())
 	case StateShoppingListPrompt:
-		return " " + ui.StyleHint.Render(locale.Active.HintYesNo)
+		return " " + ui.StyleHint.Render(ui.HintYesNo())
 	case StateUnknownBarcode:
-		return " " + ui.StyleHint.Render(locale.Active.HintUnknownBarcode)
+		return " " + ui.StyleHint.Render(ui.HintUnknownBarcode())
 	default:
 		if m.loading {
 			return " " + ui.StyleHint.Render(locale.Active.HintLoading)
@@ -2438,15 +2439,16 @@ func (m Model) renderMainContent(width, bodyH int) string {
 				ui.StyleBold.Render(locale.Active.ConsumedLabel), m.currentProduct.Name))
 			sections = append(sections, " "+ui.StyleWarning.Render(locale.Active.StockNowZero))
 			sections = append(sections, "")
-			sections = append(sections, " "+locale.Active.ShoppingListPrompt)
+			sections = append(sections, " "+ui.ShoppingListPrompt())
 		}
 	case StateUnknownBarcode:
 		sections = append(sections, m.renderProductInfo())
 		sections = append(sections, "")
 		sections = append(sections, " "+ui.StyleWarning.Render(locale.Active.UnknownBarcodePrompt))
 		sections = append(sections, "")
-		sections = append(sections, locale.Active.UnknownBarcodeCreate)
-		sections = append(sections, locale.Active.UnknownBarcodeLink)
+		create, link := ui.UnknownBarcodeActions()
+		sections = append(sections, create)
+		sections = append(sections, link)
 	}
 
 	return strings.Join(sections, "\n")
