@@ -1127,8 +1127,10 @@ func (m Model) handleRecipeListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.recipeListCursor--
 		}
 	case key == "enter" || key == "right" || keybind.Is(keybind.Right, key):
-		if m.recipeListLoaded && len(m.recipeList) > 0 {
-			r := m.recipeList[m.recipeListCursor]
+		// Index the filtered list: the cursor is bounded by it, not by
+		// the full recipe list.
+		if filtered := m.filteredRecipes(); m.recipeListLoaded && m.recipeListCursor < len(filtered) {
+			r := filtered[m.recipeListCursor]
 			m.state = StateRecipeDetail
 			m.recipeDetail = nil
 			m.recipeDetailLines = nil

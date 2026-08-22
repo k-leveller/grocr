@@ -264,7 +264,10 @@ func Parse(src string) Map {
 		if key == "" || !valid[action] {
 			continue
 		}
-		m[action] = normalize(key)
+		if key = normalize(key); !isValidKey(key) || reserved[key] {
+			continue
+		}
+		m[action] = key
 	}
 
 	return m
@@ -294,6 +297,43 @@ var knownKeys = map[string]bool{
 	"delete": true, "insert": true, "home": true, "end": true,
 	"pgup": true, "pgdown": true,
 	"shift+tab": true,
+	"shift+up":  true, "shift+down": true, "shift+left": true, "shift+right": true,
+	"shift+home": true, "shift+end": true,
+	"ctrl+up": true, "ctrl+down": true, "ctrl+left": true, "ctrl+right": true,
+	"ctrl+home": true, "ctrl+end": true, "ctrl+pgup": true, "ctrl+pgdown": true,
+	"ctrl+shift+up": true, "ctrl+shift+down": true,
+	"ctrl+shift+left": true, "ctrl+shift+right": true,
+	"ctrl+shift+home": true, "ctrl+shift+end": true,
+}
+
+// reserved keys drive the parts of the UI that are not rebindable — form
+// navigation, submitting and cancelling. Binding an action to one of them would
+// shadow that behaviour, so such lines are ignored.
+var reserved = map[string]bool{
+	"enter":     true,
+	"esc":       true,
+	"tab":       true,
+	"shift+tab": true,
+	"ctrl+c":    true,
+}
+
+// isValidKey reports whether key is a key name bubbletea can actually report.
+// Anything else — a typo such as "ctlr+q" — would be permanently unreachable.
+func isValidKey(key string) bool {
+	if len([]rune(key)) == 1 {
+		return true
+	}
+	if knownKeys[key] || isFunctionKey(key) {
+		return true
+	}
+	for _, prefix := range []string{"ctrl+", "alt+"} {
+		rest, ok := strings.CutPrefix(key, prefix)
+		if !ok {
+			continue
+		}
+		return len([]rune(rest)) == 1 || knownKeys[rest] || isFunctionKey(rest)
+	}
+	return false
 }
 
 // keyAliases maps friendly spellings onto the name bubbletea reports.
@@ -353,6 +393,10 @@ func Render() string {
 	b.WriteString("# pgdown, home, end, delete, or ctrl+<key> / alt+<key>.\n")
 	b.WriteString("#\n")
 	b.WriteString("# A \" #\" or \" ;\" after a binding starts a trailing comment.\n")
+	b.WriteString("#\n")
+	b.WriteString("# Enter, Esc, Tab, Shift+Tab and Ctrl+C are reserved by the UI and cannot be\n")
+	b.WriteString("# bound; lines that try to are ignored, as are keys that are not real key\n")
+	b.WriteString("# names.\n")
 	b.WriteString("#\n")
 	b.WriteString("# Unknown actions and unparseable lines are ignored, and any action left out\n")
 	b.WriteString("# keeps its default, so a broken file never breaks the app.\n\n")

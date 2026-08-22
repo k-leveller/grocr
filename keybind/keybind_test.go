@@ -93,11 +93,11 @@ func TestParseGarbageKeepsAllDefaults(t *testing.T) {
 }
 
 func TestParseNormalizesSpecialKeys(t *testing.T) {
-	m := Parse("quit = Escape\nmode = RETURN\nsearch = CTRL+F\nrefresh = pgdn\nnew = Up\n")
+	m := Parse("quit = CTRL+Q\nmode = DEL\nsearch = CTRL+F\nrefresh = pgdn\nnew = Up\n")
 
 	cases := map[Action]string{
-		Quit:       "esc",
-		Mode:       "enter",
+		Quit:       "ctrl+q",
+		Mode:       "delete",
 		Search:     "ctrl+f",
 		Refresh:    "pgdown",
 		NewProduct: "up",
@@ -134,7 +134,7 @@ func TestParseNormalizesSpaceAndShift(t *testing.T) {
 }
 
 func TestParseNormalizesAltKeepsCase(t *testing.T) {
-	m := Parse("quit = Alt+A\nmode = alt+b\nsearch = shift+tab\n")
+	m := Parse("quit = Alt+A\nmode = alt+b\nsearch = shift+left\n")
 
 	if got := m.Key(Quit); got != "alt+A" {
 		t.Errorf("Key(Quit) = %q, want alt+A", got)
@@ -142,8 +142,8 @@ func TestParseNormalizesAltKeepsCase(t *testing.T) {
 	if got := m.Key(Mode); got != "alt+b" {
 		t.Errorf("Key(Mode) = %q, want alt+b", got)
 	}
-	if got := m.Key(Search); got != "shift+tab" {
-		t.Errorf("Key(Search) = %q, want shift+tab", got)
+	if got := m.Key(Search); got != "shift+left" {
+		t.Errorf("Key(Search) = %q, want shift+left", got)
 	}
 }
 
@@ -292,5 +292,46 @@ func TestLoadFromUnreadablePathUsesDefaults(t *testing.T) {
 	m := LoadFrom(dir)
 	if got := m.Key(Quit); got != "q" {
 		t.Errorf("Key(Quit) = %q, want q", got)
+	}
+}
+
+// A typo must fall back to the default rather than leaving the action bound to
+// a key the terminal can never produce.
+func TestParseRejectsUnreachableKeys(t *testing.T) {
+	m := Parse("quit = ctlr+q\nmode = notakey\nsearch = ctrl+\nnew = f99x\n")
+
+	for _, a := range []Action{Quit, Mode, Search, NewProduct} {
+		if got := m.Key(a); got != Default(a) {
+			t.Errorf("Key(%q) = %q, want the default %q", a, got, Default(a))
+		}
+	}
+	if !m.Is(Quit, "q") {
+		t.Error("quit is no longer reachable after a typo'd binding")
+	}
+}
+
+// Enter, Esc, Tab and Ctrl+C drive fixed UI behaviour and must stay unbindable.
+func TestParseRejectsReservedKeys(t *testing.T) {
+	m := Parse("search = enter\nquit = esc\nmode = tab\nnew = shift+tab\nexport = ctrl+c\n")
+
+	for _, a := range []Action{Search, Quit, Mode, NewProduct, Export} {
+		if got := m.Key(a); got != Default(a) {
+			t.Errorf("Key(%q) = %q, want the default %q", a, got, Default(a))
+		}
+	}
+}
+
+func TestIsValidKey(t *testing.T) {
+	valid := []string{"q", "P", "/", " ", "up", "pgdown", "f5", "ctrl+q", "alt+A", "ctrl+shift+left", "shift+up"}
+	for _, k := range valid {
+		if !isValidKey(k) {
+			t.Errorf("isValidKey(%q) = false, want true", k)
+		}
+	}
+	invalid := []string{"ctlr+q", "notakey", "ctrl+", "f99x", "ctrl+nope"}
+	for _, k := range invalid {
+		if isValidKey(k) {
+			t.Errorf("isValidKey(%q) = true, want false", k)
+		}
 	}
 }

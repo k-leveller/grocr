@@ -13,31 +13,31 @@ type Strings struct {
 	SearchPlaceholder string // product search input field placeholder
 
 	// ── General status ─────────────────────────────────────────────────────────
-	Loading     string // "Loading..."  — panel loading indicator (capital L)
-	HintLoading string // "loading..."  — inline / input-line loading hint (lowercase)
-	Cancelled   string
-	Processing  string
+	Loading        string // "Loading..."  — panel loading indicator (capital L)
+	HintLoading    string // "loading..."  — inline / input-line loading hint (lowercase)
+	Cancelled      string
+	Processing     string
 	HintFormActive string // shown in input line while a form is active
 
 	// ── Error messages  (format strings; arg 1 = error string) ─────────────────
-	ErrLoadDefaults         string // %s = error
-	ErrLookup               string // %s = error
-	ErrAction               string // %s = error
-	ErrShoppingList         string // %s = error
-	ErrExport               string // %s = error
-	ErrMealPlan             string // %s = error
-	ErrLoadRecipes          string // %s = error
-	ErrLoadRecipeDetail     string // %s = error
-	ErrLinkBarcode          string // %s = error
-	ErrUpdateName           string // %s = error
-	ErrUpdateNotes          string // %s = error
-	ErrPriceHistory         string // %s = error
-	ErrProductNotFound      string
+	ErrLoadDefaults           string // %s = error
+	ErrLookup                 string // %s = error
+	ErrAction                 string // %s = error
+	ErrShoppingList           string // %s = error
+	ErrExport                 string // %s = error
+	ErrMealPlan               string // %s = error
+	ErrLoadRecipes            string // %s = error
+	ErrLoadRecipeDetail       string // %s = error
+	ErrLinkBarcode            string // %s = error
+	ErrUpdateName             string // %s = error
+	ErrUpdateNotes            string // %s = error
+	ErrPriceHistory           string // %s = error
+	ErrProductNotFound        string
 	ErrProductNotFoundConsume string
-	ErrInvalidUPC           string // %s = raw input value
-	ErrCannotConsumeTestMode string
-	ErrNoStockFor           string // %s = product name
-	ErrSameLocation         string
+	ErrInvalidUPC             string // %s = raw input value
+	ErrCannotConsumeTestMode  string
+	ErrNoStockFor             string // %s = product name
+	ErrSameLocation           string
 
 	// ── Success / info messages ─────────────────────────────────────────────────
 	NameUpdated  string
@@ -100,23 +100,23 @@ type Strings struct {
 	ExpiringDetailHeader string
 
 	// ── Product info labels ────────────────────────────────────────────────────
-	LabelUPC        string
-	LabelProduct    string
-	LabelInStock    string
-	LabelShelfLife  string
-	LabelLocation   string
-	LabelExpires    string
-	LabelStore      string
-	LabelLastPrice  string
-	LabelNotes      string
-	LabelOFF        string // short label used in product-info panel
-	LabelOFFName    string // label used in lookup-view panel
-	LabelCategories string
-	NewProductBadge string
-	FoundInGrocy    string
-	OpenFoodFacts   string // parenthetical source tag
-	ShelfLifeNever  string
-	FmtDays         string // %d = number of days
+	LabelUPC         string
+	LabelProduct     string
+	LabelInStock     string
+	LabelShelfLife   string
+	LabelLocation    string
+	LabelExpires     string
+	LabelStore       string
+	LabelLastPrice   string
+	LabelNotes       string
+	LabelOFF         string // short label used in product-info panel
+	LabelOFFName     string // label used in lookup-view panel
+	LabelCategories  string
+	NewProductBadge  string
+	FoundInGrocy     string
+	OpenFoodFacts    string // parenthetical source tag
+	ShelfLifeNever   string
+	FmtDays          string // %d = number of days
 	FmtProductIDHint string // %d = product ID
 
 	// ── Lookup view ───────────────────────────────────────────────────────────
@@ -182,17 +182,18 @@ type Strings struct {
 	// Args: %s = styled icon, %s = product name, %g = quantity, %s = location
 	FmtLogTransfer string
 	// Args: %s = styled icon, %s = product name, %g = quantity
-	FmtLogAdd     string
-	LogAddTo      string // %s = location name
-	LogAddExpiry  string // %s = date string
+	FmtLogAdd    string
+	LogAddTo     string // %s = location name
+	LogAddExpiry string // %s = date string
 
 	// ── Help overlay ──────────────────────────────────────────────────────────
 	HelpTitle string
 	// HelpDescs describes each rebindable action; the key column is rendered
 	// from the active keybinds. Missing entries are skipped.
 	HelpDescs map[keybind.Action]string
-	// HelpStaticBody lists the shortcuts that cannot be rebound.
-	HelpStaticBody          string
+	// HelpStaticRows lists the shortcuts that cannot be rebound, one per line,
+	// as "key\tdescription". The key column is padded to match the bound rows.
+	HelpStaticRows          string
 	HelpUnknownBarcodeTitle string
 	HelpUnknownBarcodeBody  string // %s = create key, %s = link key
 }
@@ -396,12 +397,12 @@ var English = Strings{
 		keybind.Right:         "Open item details (expiring-soon panel)",
 		keybind.Left:          "Go back",
 	},
-	HelpStaticBody: "" +
-		"  Tab/↓   Next field (form)\n" +
-		"  S-Tab/↑ Previous field (form)\n" +
-		"  Enter   Submit form\n" +
-		"  Esc     Cancel current scan\n" +
-		"  Ctrl+C  Quit\n\n",
+	HelpStaticRows: "" +
+		"Tab/↓\tNext field (form)\n" +
+		"S-Tab/↑\tPrevious field (form)\n" +
+		"Enter\tSubmit form\n" +
+		"Esc\tCancel current scan\n" +
+		"Ctrl+C\tQuit\n",
 	HelpUnknownBarcodeTitle: "Unknown Barcode",
 	HelpUnknownBarcodeBody: "" +
 		"  %s/Enter  Create a new product for this barcode\n" +

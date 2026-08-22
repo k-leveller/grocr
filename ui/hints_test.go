@@ -123,3 +123,42 @@ func containsAction(list []keybind.Action, a keybind.Action) bool {
 	}
 	return false
 }
+
+// The bound and fixed shortcut rows share one key column.
+func TestHelpRowsShareOneKeyColumn(t *testing.T) {
+	orig := keybind.Active
+	t.Cleanup(func() { keybind.Active = orig })
+	keybind.Active = keybind.Parse("quit = ctrl+q\n")
+
+	col := -1
+	for _, line := range strings.Split(helpRows(), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		r := []rune(line)
+		i := 2 // past the leading indent
+		for i < len(r) && r[i] != ' ' {
+			i++ // past the key
+		}
+		for i < len(r) && r[i] == ' ' {
+			i++ // past the padding
+		}
+		if col == -1 {
+			col = i
+		} else if i != col {
+			t.Errorf("description starts at column %d, want %d, in row %q", i, col, line)
+		}
+	}
+	if col == -1 {
+		t.Fatal("help overlay rendered no rows")
+	}
+}
+
+func TestHelpIncludesFixedShortcuts(t *testing.T) {
+	body := helpRows()
+	for _, want := range []string{"Submit form", "Cancel current scan", "Ctrl+C"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("help overlay is missing %q", want)
+		}
+	}
+}

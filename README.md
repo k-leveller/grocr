@@ -148,10 +148,14 @@ the same thing). Special keys can be spelled out: `up`, `down`, `left`, `right`,
 `enter`, `esc`, `tab`, `space`, `backspace`, `pgup`, `pgdown`, `home`, `end`,
 `delete`, `insert`, `f1`–`f12`, or `ctrl+<key>` / `alt+<key>`.
 
+`Enter`, `Esc`, `Tab`, `Shift+Tab` and `Ctrl+C` are reserved by the UI and cannot
+be bound.
+
 The defaults also live in the binary, so anything the file leaves out — or gets
-wrong — falls back to its default. Unknown action names and unparseable lines are
-skipped, which means a corrupted file never stops grocr from working. Delete the
-file to regenerate it with the defaults.
+wrong — falls back to its default. Unknown action names, unparseable lines,
+reserved keys and misspelled key names (`ctlr+q`) are all skipped, which means a
+corrupted file never stops grocr from working. Delete the file to regenerate it
+with the defaults.
 
 Hint text and the `?` help overlay always show your bindings, not the defaults.
 
