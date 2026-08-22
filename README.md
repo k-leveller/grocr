@@ -2,6 +2,8 @@
 
 A terminal UI for scanning barcodes into [Grocy](https://grocy.info/) inventory. Built with Go and [Bubble Tea](https://github.com/charmbracelet/bubbletea).
 
+This app is meant to serve as a low-friction way to enter grocery item information into your Grocy database.
+
 ## Screenshots
 
 **Add product form** — after a barcode scan, fill in expiry, location, quantity, and price:
