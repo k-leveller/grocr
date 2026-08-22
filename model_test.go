@@ -594,3 +594,24 @@ func TestExpiringDetailKeepsArrowAliases(t *testing.T) {
 		t.Errorf("old down key still fired: cursor = %d, want 0", got)
 	}
 }
+
+func TestIdleArrowsWorkWhenBoundToActions(t *testing.T) {
+	// Binding an action to an arrow key must not disable the arrow's own
+	// UPC-history behaviour.
+	withKeybinds(t, "up = up\ndown = down\n")
+
+	m := NewModel(nil, nil, true)
+	m.upcHistory = []string{"111", "222"}
+
+	next, _ := m.handleIdleKey(tea.KeyMsg{Type: tea.KeyUp})
+	got := next.(Model)
+	if got.historyPos != 0 || got.input.Value() != "111" {
+		t.Fatalf("up arrow did not recall history: pos=%d value=%q", got.historyPos, got.input.Value())
+	}
+
+	next, _ = got.handleIdleKey(tea.KeyMsg{Type: tea.KeyDown})
+	got = next.(Model)
+	if got.historyPos != -1 || got.input.Value() != "" {
+		t.Errorf("down arrow did not leave history: pos=%d value=%q", got.historyPos, got.input.Value())
+	}
+}

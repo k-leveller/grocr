@@ -154,6 +154,7 @@ func Sym(a Action) string { return Display(Active.Key(a)) }
 
 // displayNames maps special bubbletea key names to the symbol shown in the UI.
 var displayNames = map[string]string{
+	" ":         "Space",
 	"up":        "↑",
 	"down":      "↓",
 	"left":      "←",
@@ -169,6 +170,7 @@ var displayNames = map[string]string{
 	"pgup":      "PgUp",
 	"pgdown":    "PgDn",
 	"delete":    "Del",
+	"insert":    "Ins",
 }
 
 // Display renders a bubbletea key name the way it should be shown to the user.
@@ -185,7 +187,27 @@ func Display(key string) string {
 	if rest, ok := strings.CutPrefix(key, "alt+"); ok {
 		return "Alt+" + strings.ToUpper(rest)
 	}
+	if rest, ok := strings.CutPrefix(key, "shift+"); ok {
+		return "Shift+" + strings.ToUpper(rest)
+	}
+	if isFunctionKey(key) {
+		return strings.ToUpper(key)
+	}
 	return key
+}
+
+// isFunctionKey reports whether key is an "f<n>" function key name.
+func isFunctionKey(key string) bool {
+	rest, ok := strings.CutPrefix(strings.ToLower(key), "f")
+	if !ok || rest == "" {
+		return false
+	}
+	for _, r := range rest {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // Path returns the location of the keybind config file.
@@ -238,7 +260,7 @@ func Parse(src string) Map {
 			continue
 		}
 		action := Action(strings.ToLower(strings.TrimSpace(name)))
-		key = strings.TrimSpace(key)
+		key = strings.TrimSpace(stripTrailingComment(key))
 		if key == "" || !valid[action] {
 			continue
 		}
@@ -248,29 +270,73 @@ func Parse(src string) Map {
 	return m
 }
 
+// stripTrailingComment removes an end-of-line comment from a binding value. The
+// comment marker must be preceded by whitespace so that "#" and ";" stay
+// bindable keys in their own right.
+func stripTrailingComment(val string) string {
+	val = strings.TrimSpace(val)
+	for i := 1; i < len(val); i++ {
+		if val[i] != '#' && val[i] != ';' {
+			continue
+		}
+		if prev := val[i-1]; prev == ' ' || prev == '\t' {
+			return strings.TrimSpace(val[:i])
+		}
+	}
+	return val
+}
+
+// knownKeys are the multi-character key names bubbletea reports, spelled the
+// way it spells them.
+var knownKeys = map[string]bool{
+	"up": true, "down": true, "left": true, "right": true,
+	"enter": true, "esc": true, "tab": true, "backspace": true,
+	"delete": true, "insert": true, "home": true, "end": true,
+	"pgup": true, "pgdown": true,
+	"shift+tab": true,
+}
+
+// keyAliases maps friendly spellings onto the name bubbletea reports.
+var keyAliases = map[string]string{
+	"escape":   "esc",
+	"return":   "enter",
+	"pagedown": "pgdown",
+	"pgdn":     "pgdown",
+	"pageup":   "pgup",
+	"del":      "delete",
+	"ins":      "insert",
+	"space":    " ",
+	"spacebar": " ",
+}
+
 // normalize converts human spellings of special keys into the names bubbletea
 // reports. Single characters are left alone so bindings stay case-sensitive.
 func normalize(key string) string {
 	if len([]rune(key)) == 1 {
 		return key
 	}
+
 	lower := strings.ToLower(key)
-	switch lower {
-	case "escape":
-		return "esc"
-	case "return":
-		return "enter"
-	case "pagedown", "pgdn":
-		return "pgdown"
-	case "pageup":
-		return "pgup"
-	case "del":
-		return "delete"
+	if alias, ok := keyAliases[lower]; ok {
+		return alias
 	}
-	if _, ok := displayNames[lower]; ok {
+	if knownKeys[lower] || isFunctionKey(lower) {
 		return lower
 	}
-	if strings.HasPrefix(lower, "ctrl+") || strings.HasPrefix(lower, "alt+") || strings.HasPrefix(lower, "shift+") {
+	// bubbletea always reports ctrl combinations in lower case.
+	if strings.HasPrefix(lower, "ctrl+") {
+		return lower
+	}
+	// Alt keeps the modified character's case: alt+A is a different key event
+	// from alt+a.
+	if strings.HasPrefix(lower, "alt+") {
+		return "alt+" + key[len("alt+"):]
+	}
+	// Shifted letters arrive as the upper-case rune, not as "shift+x".
+	if rest, ok := strings.CutPrefix(lower, "shift+"); ok {
+		if len([]rune(rest)) == 1 {
+			return strings.ToUpper(rest)
+		}
 		return lower
 	}
 	return key
@@ -285,6 +351,8 @@ func Render() string {
 	b.WriteString("# Keys are case-sensitive: \"P\" means Shift+P. Special keys can be spelled\n")
 	b.WriteString("# out: up, down, left, right, enter, esc, tab, space, backspace, pgup,\n")
 	b.WriteString("# pgdown, home, end, delete, or ctrl+<key> / alt+<key>.\n")
+	b.WriteString("#\n")
+	b.WriteString("# A \" #\" or \" ;\" after a binding starts a trailing comment.\n")
 	b.WriteString("#\n")
 	b.WriteString("# Unknown actions and unparseable lines are ignored, and any action left out\n")
 	b.WriteString("# keeps its default, so a broken file never breaks the app.\n\n")

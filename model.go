@@ -30,14 +30,14 @@ const (
 
 // Package-level compiled regexps used by htmlToLines.
 var (
-	reOLBlock     = regexp.MustCompile(`(?is)<ol[^>]*>.*?</ol>`)
-	reLIOpen      = regexp.MustCompile(`(?is)<li[^>]*>`)
-	reLIClose     = regexp.MustCompile(`(?is)</li>`)
-	rePClose      = regexp.MustCompile(`(?is)</p>`)
-	rePOpen       = regexp.MustCompile(`(?is)<p[^>]*>`)
-	reBR          = regexp.MustCompile(`(?is)<br\s*/?>`)
-	reBlockElem   = regexp.MustCompile(`(?is)</?(?:ul|ol|div|blockquote|pre|hr|table|tr|td|th)[^>]*>`)
-	reStripTags   = regexp.MustCompile(`<[^>]*>`)
+	reOLBlock   = regexp.MustCompile(`(?is)<ol[^>]*>.*?</ol>`)
+	reLIOpen    = regexp.MustCompile(`(?is)<li[^>]*>`)
+	reLIClose   = regexp.MustCompile(`(?is)</li>`)
+	rePClose    = regexp.MustCompile(`(?is)</p>`)
+	rePOpen     = regexp.MustCompile(`(?is)<p[^>]*>`)
+	reBR        = regexp.MustCompile(`(?is)<br\s*/?>`)
+	reBlockElem = regexp.MustCompile(`(?is)</?(?:ul|ol|div|blockquote|pre|hr|table|tr|td|th)[^>]*>`)
+	reStripTags = regexp.MustCompile(`<[^>]*>`)
 )
 
 type AppState int
@@ -143,13 +143,13 @@ type Model struct {
 	linkBarcode bool
 
 	// Recipe list
-	recipeList          []api.Recipe
-	recipeFulfillment   map[int]api.RecipeFulfillment
-	recipeListLoaded    bool
-	recipeListCursor    int
-	recipeListSeq       int
-	recipeFilter        string
-	recipeFilterActive  bool
+	recipeList         []api.Recipe
+	recipeFulfillment  map[int]api.RecipeFulfillment
+	recipeListLoaded   bool
+	recipeListCursor   int
+	recipeListSeq      int
+	recipeFilter       string
+	recipeFilterActive bool
 
 	// Recipe detail
 	recipeDetail       *api.Recipe
@@ -683,29 +683,8 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.input.Value() == "" {
 			return m, tea.Quit
 		}
-	case keybind.Is(keybind.Down, key):
-		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
-			m.expPanelCursor = min(m.expPanelCursor+1, len(m.expiringSoon)-1)
-			return m, nil
-		}
-		if m.historyPos >= 0 {
-			m.historyNewer()
-			return m, nil
-		}
-	case keybind.Is(keybind.Up, key):
-		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
-			m.expPanelCursor = max(m.expPanelCursor-1, 0)
-			return m, nil
-		}
-		if m.historyPos >= 0 {
-			next := m.historyPos + 1
-			if next < len(m.upcHistory) {
-				m.historyPos = next
-				m.input.SetValue(m.upcHistory[next])
-				m.input.CursorEnd()
-			}
-			return m, nil
-		}
+	// The arrow keys are matched first: they keep working even when an action
+	// is bound to one of them.
 	case key == "up":
 		if len(m.upcHistory) > 0 {
 			next := m.historyPos + 1
@@ -730,6 +709,29 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
 			m.expPanelCursor = min(m.expPanelCursor+1, len(m.expiringSoon)-1)
+			return m, nil
+		}
+	case keybind.Is(keybind.Down, key):
+		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
+			m.expPanelCursor = min(m.expPanelCursor+1, len(m.expiringSoon)-1)
+			return m, nil
+		}
+		if m.historyPos >= 0 {
+			m.historyNewer()
+			return m, nil
+		}
+	case keybind.Is(keybind.Up, key):
+		if m.input.Value() == "" && len(m.expiringSoon) > 0 {
+			m.expPanelCursor = max(m.expPanelCursor-1, 0)
+			return m, nil
+		}
+		if m.historyPos >= 0 {
+			next := m.historyPos + 1
+			if next < len(m.upcHistory) {
+				m.historyPos = next
+				m.input.SetValue(m.upcHistory[next])
+				m.input.CursorEnd()
+			}
 			return m, nil
 		}
 	case keybind.Is(keybind.Consume, key):

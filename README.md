@@ -139,13 +139,14 @@ first time grocr starts. One binding per line:
 quit            = q
 mode            = m
 search          = /
-meal_plan       = P
+meal_plan       = P      ; a trailing comment works too
 price_history   = ctrl+p
 ```
 
-Keys are case-sensitive, so `P` means Shift+P. Special keys can be spelled out:
-`up`, `down`, `left`, `right`, `enter`, `esc`, `tab`, `space`, `backspace`,
-`pgup`, `pgdown`, `home`, `end`, `delete`, or `ctrl+<key>` / `alt+<key>`.
+Keys are case-sensitive, so `P` means Shift+P (`shift+p` is accepted and means
+the same thing). Special keys can be spelled out: `up`, `down`, `left`, `right`,
+`enter`, `esc`, `tab`, `space`, `backspace`, `pgup`, `pgdown`, `home`, `end`,
+`delete`, `insert`, `f1`–`f12`, or `ctrl+<key>` / `alt+<key>`.
 
 The defaults also live in the binary, so anything the file leaves out — or gets
 wrong — falls back to its default. Unknown action names and unparseable lines are
