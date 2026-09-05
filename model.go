@@ -193,10 +193,12 @@ type stockInfoMsg struct {
 
 type productsLoadedMsg struct {
 	products []api.Product
+	err      error
 }
 
 type stockAmountsLoadedMsg struct {
 	amounts map[int]float64
+	err     error
 }
 
 type expiringSoonMsg struct {
@@ -276,8 +278,8 @@ func (m Model) loadStockAmounts() tea.Cmd {
 		if m.testMode {
 			return stockAmountsLoadedMsg{amounts: map[int]float64{1: 3}}
 		}
-		amounts, _ := m.grocy.GetStockAmounts()
-		return stockAmountsLoadedMsg{amounts: amounts}
+		amounts, err := m.grocy.GetStockAmounts()
+		return stockAmountsLoadedMsg{amounts: amounts, err: err}
 	}
 }
 
@@ -321,9 +323,15 @@ func (m Model) loadProducts() tea.Cmd {
 				{ID: 1, Name: "Test Product"},
 			}}
 		}
-		products, _ := m.grocy.GetAllProducts()
-		return productsLoadedMsg{products: products}
+		products, err := m.grocy.GetAllProducts()
+		return productsLoadedMsg{products: products, err: err}
 	}
+}
+
+// refreshCatalog re-fetches everything the search view renders so it always
+// reflects the live Grocy database rather than a startup snapshot.
+func (m Model) refreshCatalog() tea.Cmd {
+	return tea.Batch(m.loadProducts(), m.loadStockAmounts(), m.loadDefaults())
 }
 
 func (m Model) lookupUPC(upc string, seq int) tea.Cmd {
@@ -359,14 +367,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusErr = true
 		} else {
 			m.defaults = msg.defaults
+			if m.state == StateSearch {
+				m.search.Locations = msg.defaults.Locations
+				m.search.QuantityUnits = msg.defaults.QuantityUnits
+				m.search.UpdateFilter()
+			}
 		}
 		return m, nil
 
 	case productsLoadedMsg:
+		// Keep the previous list when a refresh fails so search doesn't go blank.
+		if msg.err != nil {
+			logger.LogError("failed to load products: " + msg.err.Error())
+			return m, nil
+		}
 		m.allProducts = msg.products
+		if m.state == StateSearch {
+			m.search.Products = msg.products
+			m.search.UpdateFilter()
+		}
 		return m, nil
 
 	case stockAmountsLoadedMsg:
+		if msg.err != nil {
+			logger.LogError("failed to load stock amounts: " + msg.err.Error())
+			return m, nil
+		}
 		m.stockAmounts = msg.amounts
 		if m.state == StateSearch {
 			m.search.StockAmounts = msg.amounts
@@ -480,7 +506,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.input.SetValue("")
 		cmds := []tea.Cmd{m.input.Focus()}
 		if msg.err == nil {
-			cmds = append(cmds, m.loadExpiringSoon(), m.loadStockAmounts())
+			cmds = append(cmds, m.loadExpiringSoon(), m.loadStockAmounts(), m.loadProducts())
 		}
 		return m, tea.Batch(cmds...)
 
@@ -771,7 +797,7 @@ func (m Model) handleIdleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.search = ui.NewSearch(m.allProducts, locs, units, m.stockAmounts, m.mode == "lookup" || m.mode == "consume")
 			m.input.Blur()
-			return m, nil
+			return m, m.refreshCatalog()
 		}
 	case keybind.Is(keybind.Export, key):
 		if m.input.Value() == "" {
@@ -1674,7 +1700,7 @@ func (m Model) handleUnknownBarcodeKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			units = m.defaults.QuantityUnits
 		}
 		m.search = ui.NewSearch(m.allProducts, locs, units, m.stockAmounts, false)
-		return m, nil
+		return m, m.refreshCatalog()
 	case key == "esc":
 		m.state = StateIdle
 		m.currentProduct = nil
@@ -1897,7 +1923,7 @@ func (m Model) handleShoppingListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.offInfo = nil
 	m.stockInfo = nil
 	m.input.SetValue("")
-	cmds := []tea.Cmd{m.input.Focus(), m.loadExpiringSoon(), m.loadStockAmounts()}
+	cmds := []tea.Cmd{m.input.Focus(), m.loadExpiringSoon(), m.loadStockAmounts(), m.loadProducts()}
 	if shoppingCmd != nil {
 		cmds = append(cmds, shoppingCmd)
 	}
