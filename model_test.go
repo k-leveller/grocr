@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -8,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/k-leveller/grocr/api"
 	"github.com/k-leveller/grocr/keybind"
+	"github.com/k-leveller/grocr/ui"
 )
 
 // ---- resolveExpiry ----
@@ -649,5 +651,118 @@ func TestRecipeDetailMaxScroll(t *testing.T) {
 					tc.height, tc.nLines, got, tc.want)
 			}
 		})
+	}
+}
+
+// ---- live catalog refresh ----
+
+// batchProducesProductsLoad reports whether running cmd (a tea.Batch) yields a
+// productsLoadedMsg, i.e. the catalog is actually re-fetched.
+func batchProducesProductsLoad(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok {
+		return false
+	}
+	for _, c := range batch {
+		if _, ok := c().(productsLoadedMsg); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func TestOpeningSearchRefreshesCatalog(t *testing.T) {
+	m := NewModel(nil, nil, true)
+	next, cmd := m.handleIdleKey(keyMsg("/"))
+	if got := next.(Model).state; got != StateSearch {
+		t.Fatalf("state after search key = %v, want StateSearch", got)
+	}
+	if !batchProducesProductsLoad(cmd) {
+		t.Error("opening search did not re-fetch the product list")
+	}
+}
+
+func TestLinkBarcodeSearchRefreshesCatalog(t *testing.T) {
+	m := NewModel(nil, nil, true)
+	m.state = StateUnknownBarcode
+	next, cmd := m.handleUnknownBarcodeKey(keyMsg(keybind.Key(keybind.Link)))
+	if got := next.(Model).state; got != StateSearch {
+		t.Fatalf("state after link key = %v, want StateSearch", got)
+	}
+	if !batchProducesProductsLoad(cmd) {
+		t.Error("opening link search did not re-fetch the product list")
+	}
+}
+
+func TestProductsLoadedUpdatesOpenSearch(t *testing.T) {
+	m := NewModel(nil, nil, true)
+	m.state = StateSearch
+	m.allProducts = []api.Product{{ID: 1, Name: "Old Product"}}
+	m.search = ui.NewSearch(m.allProducts, nil, nil, nil, false)
+	m.search.Input.SetValue("fresh")
+	m.search.UpdateFilter()
+	if len(m.search.Filtered) != 0 {
+		t.Fatalf("expected no matches before refresh, got %d", len(m.search.Filtered))
+	}
+
+	fresh := []api.Product{{ID: 1, Name: "Old Product"}, {ID: 2, Name: "Fresh Milk"}}
+	next, _ := m.Update(productsLoadedMsg{products: fresh})
+	got := next.(Model)
+	if len(got.allProducts) != 2 {
+		t.Fatalf("allProducts = %d entries, want 2", len(got.allProducts))
+	}
+	if len(got.search.Filtered) != 1 || got.search.Filtered[0].ID != 2 {
+		t.Errorf("search did not pick up the newly loaded product: %+v", got.search.Filtered)
+	}
+}
+
+func TestProductsLoadedErrorKeepsPreviousList(t *testing.T) {
+	m := NewModel(nil, nil, true)
+	m.state = StateSearch
+	m.allProducts = []api.Product{{ID: 1, Name: "Old Product"}}
+	m.search = ui.NewSearch(m.allProducts, nil, nil, nil, false)
+	m.search.Input.SetValue("old")
+	m.search.UpdateFilter()
+
+	next, _ := m.Update(productsLoadedMsg{err: errors.New("boom")})
+	got := next.(Model)
+	if len(got.allProducts) != 1 {
+		t.Errorf("failed refresh wiped the product cache: %+v", got.allProducts)
+	}
+	if len(got.search.Filtered) != 1 {
+		t.Errorf("failed refresh emptied the search results: %+v", got.search.Filtered)
+	}
+}
+
+func TestStockAmountsLoadedErrorKeepsPreviousAmounts(t *testing.T) {
+	m := NewModel(nil, nil, true)
+	m.stockAmounts = map[int]float64{1: 3}
+
+	next, _ := m.Update(stockAmountsLoadedMsg{err: errors.New("boom")})
+	got := next.(Model)
+	if got.stockAmounts[1] != 3 {
+		t.Errorf("failed refresh wiped stock amounts: %+v", got.stockAmounts)
+	}
+}
+
+func TestDefaultsLoadedUpdatesOpenSearch(t *testing.T) {
+	m := NewModel(nil, nil, true)
+	m.state = StateSearch
+	m.search = ui.NewSearch(nil, nil, nil, nil, false)
+
+	defaults := &api.Defaults{
+		Locations:     []api.Location{{ID: 7, Name: "Cellar"}},
+		QuantityUnits: []api.QuantityUnit{{ID: 2, Name: "Oz"}},
+	}
+	next, _ := m.Update(defaultsLoadedMsg{defaults: defaults})
+	got := next.(Model)
+	if len(got.search.Locations) != 1 || got.search.Locations[0].Name != "Cellar" {
+		t.Errorf("search locations not refreshed: %+v", got.search.Locations)
+	}
+	if len(got.search.QuantityUnits) != 1 {
+		t.Errorf("search quantity units not refreshed: %+v", got.search.QuantityUnits)
 	}
 }

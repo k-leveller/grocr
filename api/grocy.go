@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -183,17 +184,26 @@ func (c *GrocyClient) GetQuantityUnits() ([]QuantityUnit, error) {
 	return units, nil
 }
 
+// GetDefaults collects the locations, quantity units and stores used across the
+// app. It is best-effort: the returned Defaults always carries whatever was
+// fetched successfully, but any sub-request failure is reported so callers can
+// tell a complete answer from a degraded one and avoid overwriting good data.
 func (c *GrocyClient) GetDefaults() (*Defaults, error) {
 	defaults := &Defaults{LocationID: 1, QuID: 1}
+	var errs []error
 
 	locs, err := c.GetLocations()
-	if err == nil && len(locs) > 0 {
+	if err != nil {
+		errs = append(errs, fmt.Errorf("locations: %w", err))
+	} else if len(locs) > 0 {
 		defaults.LocationID = locs[0].ID
 		defaults.Locations = locs
 	}
 
 	units, err := c.GetQuantityUnits()
-	if err == nil && len(units) > 0 {
+	if err != nil {
+		errs = append(errs, fmt.Errorf("quantity units: %w", err))
+	} else if len(units) > 0 {
 		defaults.QuantityUnits = units
 		for _, u := range units {
 			name := strings.ToLower(u.Name)
@@ -208,11 +218,13 @@ func (c *GrocyClient) GetDefaults() (*Defaults, error) {
 	}
 
 	stores, err := c.GetStores()
-	if err == nil {
+	if err != nil {
+		errs = append(errs, fmt.Errorf("stores: %w", err))
+	} else {
 		defaults.Stores = stores
 	}
 
-	return defaults, nil
+	return defaults, errors.Join(errs...)
 }
 
 func (c *GrocyClient) CreateProduct(name string, shelfLifeDays *int, defaults *Defaults, shortName string, locationID int, storeID int, quID int, daysAfterFreezing, daysAfterThawing *int) (*Product, error) {

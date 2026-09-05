@@ -103,7 +103,44 @@ func (s *Search) Update(msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-func (s *Search) UpdateFilter() { s.filter() }
+// UpdateFilter re-runs the filter after the underlying data was refreshed from
+// Grocy. Unlike a keystroke, the user did not ask for the list to move, so the
+// highlight stays on the product it was on and a location filter that no longer
+// exists is dropped.
+func (s *Search) UpdateFilter() {
+	var selectedID int
+	if s.Cursor < len(s.Filtered) {
+		selectedID = s.Filtered[s.Cursor].ID
+	}
+
+	if s.LocFilter != 0 && len(s.Locations) > 0 {
+		known := false
+		for _, loc := range s.Locations {
+			if loc.ID == s.LocFilter {
+				known = true
+				break
+			}
+		}
+		if !known {
+			s.LocFilter = 0
+		}
+	}
+
+	s.filter()
+
+	if selectedID == 0 {
+		return
+	}
+	for i, p := range s.Filtered {
+		if p.ID == selectedID {
+			s.Cursor = i
+			return
+		}
+	}
+	// The highlighted product is gone from the results; land on a known row
+	// rather than on whatever slid into its index.
+	s.Cursor = 0
+}
 
 func (s *Search) filter() {
 	query := strings.ToLower(s.Input.Value())

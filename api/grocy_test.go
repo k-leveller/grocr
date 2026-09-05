@@ -766,3 +766,27 @@ func TestGetMealPlan(t *testing.T) {
 		t.Errorf("len = %d, want 2", len(got))
 	}
 }
+
+func TestGetDefaults_reportsFailedSubRequests(t *testing.T) {
+	client, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/locations"):
+			http.Error(w, "boom", http.StatusInternalServerError)
+		case strings.HasSuffix(r.URL.Path, "/quantity_units"):
+			writeJSON(w, []QuantityUnit{{ID: 11, Name: "Piece"}})
+		case strings.HasSuffix(r.URL.Path, "/shopping_locations"):
+			writeJSON(w, []Store{{ID: 5, Name: "Market"}})
+		}
+	})
+	d, err := client.GetDefaults()
+	if err == nil {
+		t.Fatal("expected an error when the locations request fails")
+	}
+	if !strings.Contains(err.Error(), "locations") {
+		t.Errorf("error does not name the failed request: %v", err)
+	}
+	// The partial result is still returned for best-effort startup use.
+	if d == nil || d.QuID != 11 {
+		t.Errorf("expected partial defaults, got %+v", d)
+	}
+}
