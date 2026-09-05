@@ -303,6 +303,47 @@ func TestResolveQuantityUnit(t *testing.T) {
 	}
 }
 
+func TestNumberedHint(t *testing.T) {
+	if got, want := numberedHint([]string{"oz", "lb", "kg"}), "1)oz 2)lb 3)kg"; got != want {
+		t.Errorf("numberedHint = %q, want %q", got, want)
+	}
+	if got := numberedHint(nil); got != "" {
+		t.Errorf("numberedHint(nil) = %q, want empty", got)
+	}
+}
+
+// An expanded option is the option's full name, so an exact match must win over
+// a shorter name it happens to be prefixed by.
+func TestResolvePrefersExactName(t *testing.T) {
+	m := newTestModel()
+	m.defaults.Locations = []api.Location{
+		{ID: 1, Name: "Pack"},
+		{ID: 2, Name: "Packet"},
+	}
+	m.defaults.QuantityUnits = []api.QuantityUnit{
+		{ID: 1, Name: "Pack"},
+		{ID: 2, Name: "Packet"},
+	}
+	m.defaults.Stores = []api.Store{
+		{ID: 10, Name: "Mart"},
+		{ID: 11, Name: "Market"},
+	}
+
+	if got := m.resolveLocation("Packet"); got != 2 {
+		t.Errorf("resolveLocation(\"Packet\") = %d, want 2", got)
+	}
+	if got := m.resolveQuantityUnit("Packet"); got != 2 {
+		t.Errorf("resolveQuantityUnit(\"Packet\") = %d, want 2", got)
+	}
+	got, err := m.resolveOrCreateStore("Market")
+	if err != nil {
+		t.Fatalf("resolveOrCreateStore: %v", err)
+	}
+	if got != 11 {
+		t.Errorf("resolveOrCreateStore(\"Market\") = %d, want 11", got)
+	}
+}
+
 func TestResolveOrCreateStore(t *testing.T) {
 	m := newTestModel()
 

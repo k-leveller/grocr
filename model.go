@@ -1282,10 +1282,10 @@ func (m Model) buildNewProductForm() ui.Form {
 
 	qtyUnitDefault := ""
 	qtyUnitHint := ""
+	var qtyUnitOptions []string
 	if m.defaults != nil && len(m.defaults.QuantityUnits) > 0 {
-		var parts []string
-		for i, u := range m.defaults.QuantityUnits {
-			parts = append(parts, fmt.Sprintf("%d)%s", i+1, u.Name))
+		for _, u := range m.defaults.QuantityUnits {
+			qtyUnitOptions = append(qtyUnitOptions, u.Name)
 			if u.ID == m.defaults.QuID && qtyUnitDefault == "" {
 				qtyUnitDefault = u.Name
 			}
@@ -1293,15 +1293,15 @@ func (m Model) buildNewProductForm() ui.Form {
 		if qtyUnitDefault == "" {
 			qtyUnitDefault = m.defaults.QuantityUnits[0].Name
 		}
-		qtyUnitHint = strings.Join(parts, " ")
+		qtyUnitHint = numberedHint(qtyUnitOptions)
 	}
 
 	locationDefault := ""
 	locationHint := ""
+	var locationOptions []string
 	if m.defaults != nil && len(m.defaults.Locations) > 0 {
-		var parts []string
-		for i, loc := range m.defaults.Locations {
-			parts = append(parts, fmt.Sprintf("%d)%s", i+1, loc.Name))
+		for _, loc := range m.defaults.Locations {
+			locationOptions = append(locationOptions, loc.Name)
 			if loc.ID == m.defaults.LocationID && locationDefault == "" {
 				locationDefault = loc.Name
 			}
@@ -1309,17 +1309,17 @@ func (m Model) buildNewProductForm() ui.Form {
 		if locationDefault == "" {
 			locationDefault = m.defaults.Locations[0].Name
 		}
-		locationHint = strings.Join(parts, " ")
+		locationHint = numberedHint(locationOptions)
 	}
 
 	storeDefault := ""
 	storeHint := ""
+	var storeOptions []string
 	if m.defaults != nil && len(m.defaults.Stores) > 0 {
-		var parts []string
-		for i, s := range m.defaults.Stores {
-			parts = append(parts, fmt.Sprintf("%d)%s", i+1, s.Name))
+		for _, s := range m.defaults.Stores {
+			storeOptions = append(storeOptions, s.Name)
 		}
-		storeHint = strings.Join(parts, " ")
+		storeHint = numberedHint(storeOptions)
 	}
 
 	fields := []ui.FormField{
@@ -1329,10 +1329,10 @@ func (m Model) buildNewProductForm() ui.Form {
 		fields = append(fields, ui.FormField{Label: locale.Active.FieldDisplayName, Default: ""})
 	}
 	fields = append(fields,
-		ui.FormField{Label: locale.Active.FieldQtyUnit, Default: qtyUnitDefault, Hint: qtyUnitHint, Required: true},
+		ui.FormField{Label: locale.Active.FieldQtyUnit, Default: qtyUnitDefault, Hint: qtyUnitHint, Options: qtyUnitOptions, Required: true},
 		ui.FormField{Label: locale.Active.FieldExpires, Default: expiryDefault, Hint: expiryHint + " " + locale.Active.FieldExpiresHint},
-		ui.FormField{Label: locale.Active.FieldLocation, Default: locationDefault, Hint: locationHint},
-		ui.FormField{Label: locale.Active.FieldStore, Default: storeDefault, Hint: storeHint},
+		ui.FormField{Label: locale.Active.FieldLocation, Default: locationDefault, Hint: locationHint, Options: locationOptions},
+		ui.FormField{Label: locale.Active.FieldStore, Default: storeDefault, Hint: storeHint, Options: storeOptions},
 		ui.FormField{Label: locale.Active.FieldQuantity, Default: "1"},
 		ui.FormField{Label: locale.Active.FieldPrice, Default: "", Hint: locale.Active.FieldPriceHint},
 	)
@@ -1352,10 +1352,10 @@ func (m Model) buildExistingProductForm() ui.Form {
 
 	locationDefault := ""
 	locationHint := ""
+	var locationOptions []string
 	if m.defaults != nil && len(m.defaults.Locations) > 0 {
-		var parts []string
-		for i, loc := range m.defaults.Locations {
-			parts = append(parts, fmt.Sprintf("%d)%s", i+1, loc.Name))
+		for _, loc := range m.defaults.Locations {
+			locationOptions = append(locationOptions, loc.Name)
 		}
 		// Default to the product's own location name
 		for _, loc := range m.defaults.Locations {
@@ -1367,15 +1367,15 @@ func (m Model) buildExistingProductForm() ui.Form {
 		if locationDefault == "" {
 			locationDefault = m.defaults.Locations[0].Name
 		}
-		locationHint = strings.Join(parts, " ")
+		locationHint = numberedHint(locationOptions)
 	}
 
 	storeDefault := ""
 	storeHint := ""
+	var storeOptions []string
 	if m.defaults != nil && len(m.defaults.Stores) > 0 {
-		var parts []string
-		for i, s := range m.defaults.Stores {
-			parts = append(parts, fmt.Sprintf("%d)%s", i+1, s.Name))
+		for _, s := range m.defaults.Stores {
+			storeOptions = append(storeOptions, s.Name)
 		}
 		// Default to the product's own store name
 		for _, s := range m.defaults.Stores {
@@ -1384,7 +1384,7 @@ func (m Model) buildExistingProductForm() ui.Form {
 				break
 			}
 		}
-		storeHint = strings.Join(parts, " ")
+		storeHint = numberedHint(storeOptions)
 	}
 
 	qtyUnitHint := ""
@@ -1399,8 +1399,8 @@ func (m Model) buildExistingProductForm() ui.Form {
 
 	fields := []ui.FormField{
 		{Label: locale.Active.FieldExpires, Default: expiryDefault, Hint: expiryHint + " " + locale.Active.FieldExpiresHint},
-		{Label: locale.Active.FieldLocation, Default: locationDefault, Hint: locationHint},
-		{Label: locale.Active.FieldStore, Default: storeDefault, Hint: storeHint},
+		{Label: locale.Active.FieldLocation, Default: locationDefault, Hint: locationHint, Options: locationOptions},
+		{Label: locale.Active.FieldStore, Default: storeDefault, Hint: storeHint, Options: storeOptions},
 		{Label: locale.Active.FieldQuantity, Default: "1", Hint: qtyUnitHint},
 		{Label: locale.Active.FieldPrice, Default: "", Hint: locale.Active.FieldPriceHint},
 	}
@@ -1413,12 +1413,12 @@ func (m Model) buildTransferForm() ui.Form {
 	fromDefault := ""
 	toDefault := ""
 
+	var locationOptions []string
 	if m.defaults != nil && len(m.defaults.Locations) > 0 {
-		var parts []string
-		for i, loc := range m.defaults.Locations {
-			parts = append(parts, fmt.Sprintf("%d)%s", i+1, loc.Name))
+		for _, loc := range m.defaults.Locations {
+			locationOptions = append(locationOptions, loc.Name)
 		}
-		locationHint = strings.Join(parts, " ")
+		locationHint = numberedHint(locationOptions)
 
 		for _, loc := range m.defaults.Locations {
 			if loc.ID == m.currentProduct.LocationID {
@@ -1439,8 +1439,8 @@ func (m Model) buildTransferForm() ui.Form {
 
 	fields := []ui.FormField{
 		{Label: locale.Active.FieldQuantity, Default: "1"},
-		{Label: locale.Active.FieldFrom, Default: fromDefault, Hint: locationHint},
-		{Label: locale.Active.FieldTo, Default: toDefault, Hint: locationHint},
+		{Label: locale.Active.FieldFrom, Default: fromDefault, Hint: locationHint, Options: locationOptions},
+		{Label: locale.Active.FieldTo, Default: toDefault, Hint: locationHint, Options: locationOptions},
 	}
 
 	return ui.NewForm(fields)
@@ -2063,6 +2063,22 @@ func (m Model) submitForm() tea.Cmd {
 	}
 }
 
+// numberedHint renders choices as the "1)oz 2)lb" ghost text shown beside a
+// form field, matching the 1-based numbers the field's Options accept.
+func numberedHint(options []string) string {
+	parts := make([]string, len(options))
+	for i, name := range options {
+		parts[i] = fmt.Sprintf("%d)%s", i+1, name)
+	}
+	return strings.Join(parts, " ")
+}
+
+// matchesName reports whether val names the option, preferring an exact match
+// so a fully spelled-out choice never resolves to a different one it prefixes.
+func matchesName(name, val string) bool {
+	return strings.EqualFold(name, val)
+}
+
 func (m Model) resolveQuantityUnit(val string) int {
 	if m.defaults == nil || len(m.defaults.QuantityUnits) == 0 {
 		return 1
@@ -2070,6 +2086,12 @@ func (m Model) resolveQuantityUnit(val string) int {
 
 	if n, err := strconv.Atoi(val); err == nil && n >= 1 && n <= len(m.defaults.QuantityUnits) {
 		return m.defaults.QuantityUnits[n-1].ID
+	}
+
+	for _, u := range m.defaults.QuantityUnits {
+		if matchesName(u.Name, val) {
+			return u.ID
+		}
 	}
 
 	lower := strings.ToLower(val)
@@ -2092,7 +2114,12 @@ func (m Model) resolveLocation(val string) int {
 		return m.defaults.Locations[n-1].ID
 	}
 
-	// Try name prefix match
+	// Try exact name, then name prefix
+	for _, loc := range m.defaults.Locations {
+		if matchesName(loc.Name, val) {
+			return loc.ID
+		}
+	}
 	lower := strings.ToLower(val)
 	for _, loc := range m.defaults.Locations {
 		if strings.HasPrefix(strings.ToLower(loc.Name), lower) {
@@ -2114,7 +2141,12 @@ func (m Model) resolveOrCreateStore(val string) (int, error) {
 			return m.defaults.Stores[n-1].ID, nil
 		}
 
-		// Try name prefix match
+		// Try exact name, then name prefix
+		for _, s := range m.defaults.Stores {
+			if matchesName(s.Name, val) {
+				return s.ID, nil
+			}
+		}
 		lower := strings.ToLower(val)
 		for _, s := range m.defaults.Stores {
 			if strings.HasPrefix(strings.ToLower(s.Name), lower) {

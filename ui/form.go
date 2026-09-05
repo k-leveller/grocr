@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -14,7 +15,10 @@ type FormField struct {
 	Default  string
 	Hint     string
 	Required bool
-	Input    textinput.Model
+	// Options are the numbered choices offered in Hint, in the same order.
+	// Typing the number of a choice replaces the input with the choice itself.
+	Options []string
+	Input   textinput.Model
 }
 
 type Form struct {
@@ -22,6 +26,13 @@ type Form struct {
 	FocusIndex  int
 	Submitted   bool
 	Cancelled   bool
+
+	// pendingNumber is the option number a live expansion replaced, and
+	// pendingValue the option name that replaced it. The swap is provisional:
+	// typing on undoes it, so free text that merely starts with an option
+	// number stays reachable.
+	pendingNumber string
+	pendingValue  string
 }
 
 func NewForm(fields []FormField) Form {
@@ -46,6 +57,7 @@ func (f *Form) Update(msg tea.Msg) tea.Cmd {
 		case "shift+tab", "up":
 			return f.prevField()
 		case "enter":
+			f.clearPending()
 			if i, ok := f.firstMissingRequired(); ok {
 				f.Fields[f.FocusIndex].Input.Blur()
 				f.FocusIndex = i
@@ -57,18 +69,82 @@ func (f *Form) Update(msg tea.Msg) tea.Cmd {
 			f.Cancelled = true
 			return nil
 		}
+		f.undoExpansion(msg)
 	}
 
 	// Update the focused input
 	if f.FocusIndex < len(f.Fields) {
 		var cmd tea.Cmd
 		f.Fields[f.FocusIndex].Input, cmd = f.Fields[f.FocusIndex].Input.Update(msg)
+		f.expandOption()
 		return cmd
 	}
 	return nil
 }
 
+// undoExpansion puts back the number a live expansion replaced, before the key
+// that triggered it reaches the input. Typing on an expansion therefore builds
+// on the digits rather than on the option name, so a store named "7-Eleven"
+// stays typeable even where 7 already names a store; a second digit likewise
+// re-selects, turning "1" into "12". Any key that is not plain editing simply
+// commits the expansion.
+func (f *Form) undoExpansion(msg tea.KeyMsg) {
+	if f.pendingValue == "" || f.FocusIndex >= len(f.Fields) {
+		return
+	}
+	switch msg.Type {
+	case tea.KeyRunes, tea.KeySpace, tea.KeyBackspace, tea.KeyDelete:
+	default:
+		f.clearPending()
+		return
+	}
+	in := &f.Fields[f.FocusIndex].Input
+	if in.Value() == f.pendingValue {
+		in.SetValue(f.pendingNumber)
+		in.CursorEnd()
+	}
+	f.clearPending()
+}
+
+// expandOption swaps a typed option number for the option it names, so the
+// field reads "oz" the moment "1" is typed.
+func (f *Form) expandOption() {
+	field := &f.Fields[f.FocusIndex]
+	val := field.Input.Value()
+	n, ok := optionIndex(val, len(field.Options))
+	if !ok {
+		return
+	}
+	name := field.Options[n-1]
+	field.Input.SetValue(name)
+	field.Input.CursorEnd()
+	f.pendingNumber, f.pendingValue = val, name
+}
+
+func (f *Form) clearPending() {
+	f.pendingNumber, f.pendingValue = "", ""
+}
+
+// optionIndex reports the 1-based option val selects, if val is a plain number
+// naming one of count options.
+func optionIndex(val string, count int) (int, bool) {
+	if count == 0 || val == "" || (len(val) > 1 && val[0] == '0') {
+		return 0, false
+	}
+	for _, r := range val {
+		if r < '0' || r > '9' {
+			return 0, false
+		}
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil || n < 1 || n > count {
+		return 0, false
+	}
+	return n, true
+}
+
 func (f *Form) nextField() tea.Cmd {
+	f.clearPending()
 	if f.FocusIndex < len(f.Fields)-1 {
 		f.Fields[f.FocusIndex].Input.Blur()
 		f.FocusIndex++
@@ -78,6 +154,7 @@ func (f *Form) nextField() tea.Cmd {
 }
 
 func (f *Form) prevField() tea.Cmd {
+	f.clearPending()
 	if f.FocusIndex > 0 {
 		f.Fields[f.FocusIndex].Input.Blur()
 		f.FocusIndex--
