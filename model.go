@@ -365,13 +365,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logger.LogError("failed to load Grocy defaults: " + msg.err.Error())
 			m.statusMsg = fmt.Sprintf(locale.Active.ErrLoadDefaults, msg.err.Error())
 			m.statusErr = true
-		} else {
-			m.defaults = msg.defaults
-			if m.state == StateSearch {
-				m.search.Locations = msg.defaults.Locations
-				m.search.QuantityUnits = msg.defaults.QuantityUnits
-				m.search.UpdateFilter()
+			// A partial answer is better than nothing at startup, but it must not
+			// replace defaults that loaded cleanly earlier.
+			if m.defaults == nil && msg.defaults != nil {
+				m.defaults = msg.defaults
 			}
+			return m, nil
+		}
+		m.defaults = msg.defaults
+		if m.state == StateSearch {
+			m.search.Locations = msg.defaults.Locations
+			m.search.QuantityUnits = msg.defaults.QuantityUnits
+			m.search.UpdateFilter()
 		}
 		return m, nil
 
